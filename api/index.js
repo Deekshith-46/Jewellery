@@ -1,9 +1,9 @@
 const serverless = require('serverless-http');
 const app = require('../src/app');
 
-module.exports = (req, res) => {
-  const handler = serverless(app);
-  return handler(req, res);
-};
+// create the handler once to avoid re-instantiation per request
+const handler = serverless(app);
+
+module.exports = handler;
 
 
