@@ -6,7 +6,11 @@ MONGO_URI = MONGO_URI.replace(/^"(.*)"$/, '$1');
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(MONGO_URI, { dbName: undefined });
+    await mongoose.connect(MONGO_URI, {
+      dbName: undefined,
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000
+    });
     console.log('MongoDB connected');
   } catch (err) {
     console.error('MongoDB connection error:', err.message);
