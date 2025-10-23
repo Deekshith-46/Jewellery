@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-let MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jewelrydb';
+let MONGO_URI = process.env.MONGODB_URI;
 // strip surrounding quotes if present (some .env values include them)
 MONGO_URI = MONGO_URI.replace(/^"(.*)"$/, '$1');
 

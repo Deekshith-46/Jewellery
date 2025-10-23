@@ -24,8 +24,9 @@ exports.addWish = async (req, res, next) => {
       if (!require('mongoose').Types.ObjectId.isValid(diamondSpecId)) {
         return res.status(400).json({ message: 'Invalid diamondSpecId' });
       }
-      const exists = await DiamondSpec.findById(diamondSpecId).select('_id');
+      const exists = await DiamondSpec.findById(diamondSpecId).select('_id active');
       if (!exists) return res.status(400).json({ message: 'Diamond not found' });
+      if (!exists.active) return res.status(400).json({ message: 'Diamond is not active' });
     }
 
     const doc = new WishlistItem({ userId: req.user._id, productId, diamondSpecId });
@@ -49,7 +50,7 @@ exports.getAllByUser = async (req, res, next) => {
   try {
     const items = await WishlistItem.find({ userId: req.user._id })
       .populate({ path: 'productId', select: 'name slug basePrice metalPrice images metalId styleId shapeId active' })
-      .populate({ path: 'diamondSpecId', select: 'sku shapeId carat cut color clarity price available' })
+      .populate({ path: 'diamondSpecId', select: 'sku shapeId carat cut color clarity price available active' })
       .lean();
     res.json(items);
   } catch (err) { next(err); }

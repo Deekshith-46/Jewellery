@@ -10,7 +10,6 @@ const OrderSchema = new mongoose.Schema({
   finalTotal: Number,
   status: { type: String, default: 'pending' },
   paymentStatus: { type: String, default: 'pending' },
-  couponCode: String,
   items: [{ type: mongoose.Schema.Types.ObjectId, ref: 'OrderItem' }]
 }, { timestamps: true });
 

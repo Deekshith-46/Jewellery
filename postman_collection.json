@@ -1,0 +1,295 @@
+{
+  "info": {
+    "name": "Jewellery Backend API",
+    "description": "API collection for Jewellery Backend with Excel upload functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "User Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "{{product_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Product by SKU",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/sku/{{product_sku}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "sku", "{{product_sku}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Products",
+      "item": [
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productName\": \"Test Product\",\n  \"description\": \"Test Description\",\n  \"metalPrice\": 1000,\n  \"stock\": 10,\n  \"categoryId\": \"{{category_id}}\",\n  \"styleId\": \"{{style_id}}\",\n  \"shapeId\": \"{{shape_id}}\",\n  \"defaultImages\": [\"https://example.com/image1.jpg\"],\n  \"variantImages\": [\"https://example.com/variant1.jpg\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products"]
+            }
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productName\": \"Updated Product Name\",\n  \"metalPrice\": 1200,\n  \"stock\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "{{product_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "{{product_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Excel Upload",
+      "item": [
+        {
+          "name": "Flexible Excel Upload (NEW - Recommended)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "path/to/your/excel/file.xlsx"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/bulk-flexible",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "bulk-flexible"]
+            },
+            "description": "New flexible Excel upload that supports:\n- Any column names (metal_price, stock, availability, etc.)\n- Batch image upload to Cloudinary\n- Faster processing\n- Automatic image array consolidation\n- Update existing products by ID/SKU/Name"
+          }
+        },
+        {
+          "name": "Legacy Excel Upload by SKU",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "path/to/your/excel/file.xlsx"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/bulk-sku",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "bulk-sku"]
+            },
+            "description": "Legacy Excel upload that requires specific column names and uses productSku for upsert"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "product_sku",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "style_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shape_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

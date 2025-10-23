@@ -2,7 +2,6 @@ const Order = require('../../models/user/Order');
 const OrderItem = require('../../models/user/OrderItem');
 const Product = require('../../models/admin/Product');
 const DiamondSpec = require('../../models/admin/DiamondSpec');
-const Coupon = require('../../models/admin/Coupon');
 
 exports.placeOrder = async (req, res, next) => {
   try {
@@ -11,7 +10,6 @@ exports.placeOrder = async (req, res, next) => {
     const {
       items = [],
       shippingAddressId,
-      couponCode,
       shippingCost: shippingCostInput,
       taxPercent: taxPercentInput
     } = req.body;
@@ -31,6 +29,7 @@ exports.placeOrder = async (req, res, next) => {
       if (it.diamondSpecId) {
         const diamond = await DiamondSpec.findById(it.diamondSpecId);
         if (!diamond) return res.status(400).json({ message: 'Invalid diamond: ' + it.diamondSpecId });
+        if (!diamond.active) return res.status(400).json({ message: `Diamond ${diamond.sku} is not active` });
         basePrice += diamond.price;
         if (diamond.stock < (it.quantity || 1)) return res.status(400).json({ message: `Insufficient stock for ${diamond.sku}` });
       }
@@ -40,7 +39,6 @@ exports.placeOrder = async (req, res, next) => {
         productId: it.productId,
         diamondSpecId: it.diamondSpecId,
         quantity: qty,
-        sizeValue: it.sizeValue,
         metalId: it.metalId,
         engravingText: it.engravingText,
         itemPrice: basePrice
@@ -48,18 +46,6 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     let discount = 0;
-    let coupon = null;
-    if (couponCode) {
-      coupon = await Coupon.findOne({ code: couponCode.toUpperCase(), active: true });
-      if (!coupon) return res.status(400).json({ message: 'Invalid coupon' });
-      if (coupon.expiresAt && coupon.expiresAt < new Date()) return res.status(400).json({ message: 'Coupon expired' });
-      if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) return res.status(400).json({ message: 'Coupon usage limit reached' });
-      if (coupon.perUserLimit > 0) {
-        const userUses = await Order.countDocuments({ userId, couponCode: coupon.code });
-        if (userUses >= coupon.perUserLimit) return res.status(400).json({ message: 'Coupon per-user limit reached' });
-      }
-      discount = coupon.type === 'fixed' ? coupon.value : (coupon.value / 100) * subtotal;
-    }
 
     // Determine tax percent: request > env TAX_PERCENT > 0
     const envTax = Number(process.env.TAX_PERCENT || 0);
@@ -87,11 +73,6 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     order.items = createdItems.map(x => x._id);
-    if (coupon) {
-      order.couponCode = coupon.code;
-      coupon.usedCount = (coupon.usedCount || 0) + 1;
-      await coupon.save();
-    }
     await order.save();
 
     const populated = await Order.findById(order._id).populate({

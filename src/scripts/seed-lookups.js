@@ -2,13 +2,11 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const connectDB = require('../config/db');
 const Style = require('../models/admin/Style');
-const Gemstone = require('../models/admin/Gemstone');
-const Size = require('../models/admin/Size');
 const Shape = require('../models/admin/Shape');
 const Metal = require('../models/admin/Metal');
 const Category = require('../models/admin/Category');
 const User = require('../models/user/User');
-const { STYLE_NAMES, GEMSTONE_NAMES, SIZE_VALUES, SHAPE_TYPES, METAL_TYPES, CATEGORIES_ENUM } = require('../models/admin/enums');
+const { STYLE_NAMES, SHAPE_TYPES, METAL_TYPES, CATEGORIES_ENUM } = require('../models/admin/enums');
 const bcrypt = require('bcryptjs');
 
 (async () => {
@@ -16,12 +14,6 @@ const bcrypt = require('bcryptjs');
     await connectDB();
     for (const name of STYLE_NAMES) {
       await Style.updateOne({ code: name.toLowerCase() }, { code: name.toLowerCase(), name }, { upsert: true });
-    }
-    for (const name of GEMSTONE_NAMES) {
-      await Gemstone.updateOne({ code: name }, { code: name, name }, { upsert: true });
-    }
-    for (const v of SIZE_VALUES) {
-      await Size.updateOne({ value: v }, { value: v, label: `Size ${v}` }, { upsert: true });
     }
     for (const s of SHAPE_TYPES) {
       await Shape.updateOne({ code: s }, { code: s, name: s }, { upsert: true });

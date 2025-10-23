@@ -26,19 +26,15 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', require('./routes/user/auth'));
 app.use('/api/products', require('./routes/user/products'));
 app.use('/api/diamonds', require('./routes/user/diamonds'));
-app.use('/api/coupons', require('./routes/user/coupons'));
 app.use('/api/orders', require('./routes/user/orders'));
 app.use('/api/wishlist', require('./routes/user/wishlist'));
 app.use('/api/addresses', require('./routes/user/addresses'));
-app.use('/api/contacts', require('./routes/user/contacts'));
 
 // admin routes
 app.use('/api/admin/auth', require('./routes/admin/auth'));
 app.use('/api/admin/products', require('./routes/admin/products'));
 app.use('/api/admin/diamonds', require('./routes/admin/diamonds'));
-app.use('/api/admin/coupons', require('./routes/admin/coupons'));
 app.use('/api/admin/orders', require('./routes/admin/orders'));
-app.use('/api/admin/contacts', require('./routes/admin/contacts'));
 
 // error handler (last)
 app.use(errorHandler);
