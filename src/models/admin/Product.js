@@ -2,39 +2,43 @@ const mongoose = require('mongoose');
 const slugify = require('slugify');
 
 const ProductSchema = new mongoose.Schema({
-  productSku: { type: String, unique: true, sparse: true, index: true },
-  // normalized fields
-  productName: String,
-  slug: { type: String, index: true },
+  // Master product identifier
+  productId: { type: String, required: true, unique: true, index: true }, // e.g., ring-001
+  title: { type: String, required: true },
+  sku_master: { type: String }, // optional master SKU
   description: String,
-  categoryId: { type: String },
-  styleId: { type: String },
-  stock: { type: Number, default: 0 },
-  metalType: { type: String },
-  shape: { type: String },
-  metalWeight: Number,
-  metalCost: Number,
-  metalPrice: Number,
-  availability: { type: String, enum: ['available','limited','out_of_stock'], default: 'available' },
-  // arrays
-  defaultImages: [{ type: String }],
-  variantImages: [{ type: String }],
-  availableMetalTypes: [{ type: String }],
-  availableShapes: [{ type: String }],
-  readyToShip: { type: Boolean, default: false },
+  slug: { type: String, index: true },
+  
+  // Categories and styling
+  categories: [String], // engagement, wedding, etc.
+  style: String, // classic, vintage
+  main_shape: String, // primary shape if any
+  
+  // Core functionality flags
+  readyToShip: { type: Boolean, default: false }, // TRUE = Ready to Ship, FALSE = Design Your Own
+  default_price: Number, // starting price or null
+  
+  // Image references
+  default_images: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Image' }],
+  
+  // Additional features
   engravingAllowed: { type: Boolean, default: false },
   active: { type: Boolean, default: true },
-  // raw Excel-compatible fields (stored as-is for completeness
+  
+  // Metadata for extra properties
+  metadata: { type: mongoose.Schema.Types.Mixed }
 }, { timestamps: true });
 
 ProductSchema.pre('validate', function(next) {
-  if (!this.slug && this.productName) {
-    this.slug = slugify(this.productName, { lower: true });
+  // Generate slug from title
+  if (!this.slug && this.title) {
+    this.slug = slugify(this.title, { lower: true });
   }
   next();
 });
 
-ProductSchema.index({ productName: 'text', description: 'text' });
+// Text search index
+ProductSchema.index({ title: 'text', description: 'text' });
 
 // Ensure uniqueness of slug only when it exists (avoid dup key on null)
 ProductSchema.index(

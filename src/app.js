@@ -29,12 +29,15 @@ app.use('/api/diamonds', require('./routes/user/diamonds'));
 app.use('/api/orders', require('./routes/user/orders'));
 app.use('/api/wishlist', require('./routes/user/wishlist'));
 app.use('/api/addresses', require('./routes/user/addresses'));
+app.use('/api/cart', require('./routes/user/cart'));
 
 // admin routes
 app.use('/api/admin/auth', require('./routes/admin/auth'));
 app.use('/api/admin/products', require('./routes/admin/products'));
 app.use('/api/admin/diamonds', require('./routes/admin/diamonds'));
 app.use('/api/admin/orders', require('./routes/admin/orders'));
+app.use('/api/admin/variants', require('./routes/admin/variants'));
+app.use('/api/admin/metals', require('./routes/admin/metals'));
 
 // error handler (last)
 app.use(errorHandler);

@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "make:templates": "node scripts/make-templates.js"
+    "make:templates": "node scripts/make-templates.js",
+    "import:excel": "node scripts/importFromExcel.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

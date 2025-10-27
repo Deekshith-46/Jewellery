@@ -1,15 +1,29 @@
 {
   "info": {
-    "name": "Jewellery Backend API",
-    "description": "API collection for Jewellery Backend with Excel upload functionality",
+    "name": "Jewellery Backend API - Complete",
+    "description": "Complete API collection for Jewellery Backend with all product endpoints",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Authentication",
+      "name": "1. Authentication",
       "item": [
         {
           "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('admin_token', jsonData.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -26,11 +40,26 @@
               "raw": "{{base_url}}/api/admin/auth/login",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "auth", "login"]
-            }
+            },
+            "description": "Login as admin to get authentication token. The token is automatically saved to environment variable 'admin_token'."
           }
         },
         {
           "name": "User Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('user_token', jsonData.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -47,16 +76,155 @@
               "raw": "{{base_url}}/api/auth/login",
               "host": ["{{base_url}}"],
               "path": ["api", "auth", "login"]
-            }
+            },
+            "description": "Login as user to get authentication token. The token is automatically saved to environment variable 'user_token'."
           }
         }
       ]
     },
     {
-      "name": "Products",
+      "name": "2. User Product APIs",
       "item": [
         {
-          "name": "Get All Products",
+          "name": "List Products (Ready to Ship)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/list?tab=ready&page=1&limit=24",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "list"],
+              "query": [
+                {
+                  "key": "tab",
+                  "value": "ready",
+                  "description": "Use 'ready' for Ready to Ship products"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "24"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Search by product name or description"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by category"
+                },
+                {
+                  "key": "style",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by style"
+                },
+                {
+                  "key": "shape",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by shape"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Minimum price filter"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Maximum price filter"
+                },
+                {
+                  "key": "sort",
+                  "value": "-createdAt",
+                  "disabled": true,
+                  "description": "Sort order (e.g., -createdAt, price, -price)"
+                }
+              ]
+            },
+            "description": "Get list of ready-to-ship products (products with available variants in stock)"
+          }
+        },
+        {
+          "name": "List Products (Design Your Own)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/list?tab=design&page=1&limit=24",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "list"],
+              "query": [
+                {
+                  "key": "tab",
+                  "value": "design",
+                  "description": "Use 'design' for Design Your Own products"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "24"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "style",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "shape",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get list of design-your-own products (products with readyToShip=false)"
+          }
+        },
+        {
+          "name": "Get Product Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/detail/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "detail", "{{product_id}}"]
+            },
+            "description": "Get detailed product information including variants and images. Returns: product, variants array, and images array."
+          }
+        },
+        {
+          "name": "Get All Products (Legacy)",
           "request": {
             "method": "GET",
             "url": {
@@ -71,37 +239,93 @@
                 {
                   "key": "limit",
                   "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Search text"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "metalType",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "style",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "shape",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "-createdAt",
+                  "disabled": true
                 }
               ]
-            }
+            },
+            "description": "Legacy endpoint for getting all active products with filtering options"
           }
         },
         {
-          "name": "Get Product by ID",
+          "name": "Get Product by ID (Legacy)",
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/products/{{product_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "products", "{{product_id}}"]
-            }
+            },
+            "description": "Legacy endpoint to get a single product by ID or productId"
           }
         },
         {
-          "name": "Get Product by SKU",
+          "name": "Get Price for Selection",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/products/sku/{{product_sku}}",
+              "raw": "{{base_url}}/api/products/{{product_id}}/price?metal=14k_yellow_gold&quantity=1",
               "host": ["{{base_url}}"],
-              "path": ["api", "products", "sku", "{{product_sku}}"]
-            }
+              "path": ["api", "products", "{{product_id}}", "price"],
+              "query": [
+                {
+                  "key": "metal",
+                  "value": "14k_yellow_gold",
+                  "description": "Metal type selection"
+                },
+                {
+                  "key": "quantity",
+                  "value": "1",
+                  "description": "Quantity"
+                }
+              ]
+            },
+            "description": "Calculate price for a product based on metal selection and quantity"
           }
         }
       ]
     },
     {
-      "name": "Admin Products",
+      "name": "3. Admin Product APIs",
       "item": [
         {
           "name": "Create Product",
@@ -119,13 +343,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productName\": \"Test Product\",\n  \"description\": \"Test Description\",\n  \"metalPrice\": 1000,\n  \"stock\": 10,\n  \"categoryId\": \"{{category_id}}\",\n  \"styleId\": \"{{style_id}}\",\n  \"shapeId\": \"{{shape_id}}\",\n  \"defaultImages\": [\"https://example.com/image1.jpg\"],\n  \"variantImages\": [\"https://example.com/variant1.jpg\"]\n}"
+              "raw": "{\n  \"productSku\": \"RING-001\",\n  \"productName\": \"Elegant Diamond Ring\",\n  \"description\": \"Beautiful diamond ring with elegant design\",\n  \"categoryId\": \"{{category_id}}\",\n  \"styleId\": \"{{style_id}}\",\n  \"metalType\": \"14k_yellow_gold\",\n  \"shape\": \"round\",\n  \"metalWeight\": 5.5,\n  \"metalCost\": 500,\n  \"metalPrice\": 750,\n  \"stock\": 10,\n  \"defaultImages\": [\"https://example.com/image1.jpg\", \"https://example.com/image2.jpg\"],\n  \"variantImages\": [\"https://example.com/variant1.jpg\"],\n  \"availableMetalTypes\": [\"14k_yellow_gold\", \"14k_white_gold\", \"18k_yellow_gold\"],\n  \"availableShapes\": [\"round\", \"princess\", \"cushion\"],\n  \"readyToShip\": false,\n  \"engravingAllowed\": true,\n  \"active\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/admin/products",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "products"]
-            }
+            },
+            "description": "Create a new product (Admin only). Requires admin authentication token."
           }
         },
         {
@@ -144,13 +369,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productName\": \"Updated Product Name\",\n  \"metalPrice\": 1200,\n  \"stock\": 15\n}"
+              "raw": "{\n  \"productName\": \"Updated Product Name\",\n  \"description\": \"Updated description\",\n  \"metalPrice\": 850,\n  \"stock\": 15,\n  \"active\": true\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/admin/products/{{product_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "products", "{{product_id}}"]
-            }
+            },
+            "description": "Update an existing product by ID (Admin only). You can update any field partially."
           }
         },
         {
@@ -167,44 +393,48 @@
               "raw": "{{base_url}}/api/admin/products/{{product_id}}",
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "products", "{{product_id}}"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Excel Upload",
-      "item": [
-        {
-          "name": "Flexible Excel Upload (NEW - Recommended)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}"
-              }
-            ],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "file",
-                  "type": "file",
-                  "src": "path/to/your/excel/file.xlsx"
-                }
-              ]
             },
-            "url": {
-              "raw": "{{base_url}}/api/admin/products/bulk-flexible",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "products", "bulk-flexible"]
-            },
-            "description": "New flexible Excel upload that supports:\n- Any column names (metal_price, stock, availability, etc.)\n- Batch image upload to Cloudinary\n- Faster processing\n- Automatic image array consolidation\n- Update existing products by ID/SKU/Name"
+            "description": "Permanently delete a product by ID (Admin only)"
           }
         },
         {
-          "name": "Legacy Excel Upload by SKU",
+          "name": "Deactivate Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/{{product_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "{{product_id}}", "deactivate"]
+            },
+            "description": "Deactivate a product (sets active=false). The product will not appear in user-facing APIs."
+          }
+        },
+        {
+          "name": "Activate Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/products/{{product_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "products", "{{product_id}}", "activate"]
+            },
+            "description": "Activate a product (sets active=true)"
+          }
+        },
+        {
+          "name": "Bulk Upload Products (Excel)",
           "request": {
             "method": "POST",
             "header": [
@@ -219,7 +449,8 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "path/to/your/excel/file.xlsx"
+                  "src": "",
+                  "description": "Select your Excel file (.xlsx) with product data"
                 }
               ]
             },
@@ -228,23 +459,36 @@
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "products", "bulk-sku"]
             },
-            "description": "Legacy Excel upload that requires specific column names and uses productSku for upsert"
+            "description": "Bulk upload/update products via Excel file. Required columns: productSku, product_name. Optional: description, categories, style, stock, metal_type, shape, metal_weight, metal_cost, metal_price, availability, defaultImg_1, defaultImg_2, variant1-4, availableMetalTypes, availableShapes, readyToShip, engravingAllowed, active."
           }
         }
       ]
     },
     {
-      "name": "Health Check",
+      "name": "4. Health Check",
       "item": [
         {
-          "name": "Health Check",
+          "name": "Root Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Basic health check at root endpoint"
+          }
+        },
+        {
+          "name": "API Health Check",
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/health",
               "host": ["{{base_url}}"],
               "path": ["api", "health"]
-            }
+            },
+            "description": "API health check endpoint"
           }
         }
       ]
@@ -272,22 +516,12 @@
       "type": "string"
     },
     {
-      "key": "product_sku",
-      "value": "",
-      "type": "string"
-    },
-    {
       "key": "category_id",
       "value": "",
       "type": "string"
     },
     {
       "key": "style_id",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "shape_id",
       "value": "",
       "type": "string"
     }
