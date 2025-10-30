@@ -25,6 +25,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 // user routes
 app.use('/api/auth', require('./routes/user/auth'));
 app.use('/api/products', require('./routes/user/products'));
+app.use('/api/variants', require('./routes/user/variants'));
 app.use('/api/diamonds', require('./routes/user/diamonds'));
 app.use('/api/orders', require('./routes/user/orders'));
 app.use('/api/wishlist', require('./routes/user/wishlist'));

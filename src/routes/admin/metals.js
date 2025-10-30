@@ -11,6 +11,7 @@ router.post('/calculate-price', metalsController.calculateCustomPrice);
 
 // Admin routes
 router.post('/', auth, admin, metalsController.createMetal);
+router.put('/bulk-update', auth, admin, metalsController.bulkUpdateMetals); // Bulk update (must be before /:metal_type)
 router.put('/:metal_type', auth, admin, metalsController.updateMetal);
 router.delete('/:metal_type', auth, admin, metalsController.deleteMetal);
 

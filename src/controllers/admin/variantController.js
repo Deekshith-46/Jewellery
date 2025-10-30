@@ -1,22 +1,34 @@
 const Variant = require('../../models/admin/Variant');
 const Product = require('../../models/admin/Product');
+const mongoose = require('mongoose');
 
-// Find variant by productId and specifications
+// Find variant by productId/productSku and specifications
 exports.findVariant = async (req, res, next) => {
   try {
-    const { productId, metal_type, carat, shape, diamond_type } = req.query;
+    const { productId, product, productSku, metal_type, carat, shape, diamond_type } = req.query;
     
-    if (!productId) {
-      return res.status(400).json({ message: 'productId is required' });
+    const productIdentifier = productId || product || productSku;
+    if (!productIdentifier) {
+      return res.status(400).json({ message: 'productId, product, or productSku is required' });
     }
 
-    const query = { productId, active: true };
+    // Build query - try to match by ObjectId or productSku
+    const query = { active: true };
+    
+    // If it's a valid ObjectId, search by product reference
+    if (mongoose.Types.ObjectId.isValid(productIdentifier)) {
+      query.product = productIdentifier;
+    } else {
+      // Otherwise search by productSku
+      query.productSku = productIdentifier;
+    }
+    
     if (metal_type) query.metal_type = metal_type;
     if (carat) query.carat = Number(carat);
     if (shape) query.shape = shape;
     if (diamond_type) query.diamond_type = diamond_type;
 
-    const variant = await Variant.findOne(query);
+    const variant = await Variant.findOne(query).populate('product', 'productSku productName title');
     
     if (!variant) {
       return res.status(404).json({ message: 'Variant not found' });
@@ -32,14 +44,31 @@ exports.findVariant = async (req, res, next) => {
 exports.getVariantsByProduct = async (req, res, next) => {
   try {
     const { productId } = req.params;
-    const { active = true, inStock = false } = req.query;
+    const { active, inStock = false } = req.query;
 
-    const query = { productId };
+    // Build query - productId can be ObjectId or productSku
+    const query = {};
+    
+    // If it's a valid ObjectId, search by product reference
+    if (mongoose.Types.ObjectId.isValid(productId)) {
+      query.product = productId;
+    } else {
+      // Otherwise search by productSku
+      query.productSku = productId;
+    }
+    
     if (active !== undefined) query.active = active === 'true';
     if (inStock === 'true') query.stock = { $gt: 0 };
 
-    const variants = await Variant.find(query).sort({ metal_type: 1, carat: 1, shape: 1 });
-    res.json(variants);
+    const variants = await Variant.find(query)
+      .populate('product', 'productSku productName title')
+      .sort({ metal_type: 1, carat: 1, shape: 1 });
+    
+    res.json({
+      productId,
+      count: variants.length,
+      variants
+    });
   } catch (err) {
     next(err);
   }
@@ -51,7 +80,17 @@ exports.getAvailableOptions = async (req, res, next) => {
     const { productId } = req.params;
     const { inStock = true } = req.query;
 
-    const query = { productId, active: true };
+    // Build query - productId can be ObjectId or productSku
+    const query = { active: true };
+    
+    // If it's a valid ObjectId, search by product reference
+    if (mongoose.Types.ObjectId.isValid(productId)) {
+      query.product = productId;
+    } else {
+      // Otherwise search by productSku
+      query.productSku = productId;
+    }
+    
     if (inStock === 'true') query.stock = { $gt: 0 };
 
     const variants = await Variant.find(query);
@@ -60,7 +99,9 @@ exports.getAvailableOptions = async (req, res, next) => {
       metals: [...new Set(variants.map(v => v.metal_type).filter(Boolean))],
       shapes: [...new Set(variants.map(v => v.shape).filter(Boolean))],
       carats: [...new Set(variants.map(v => v.carat).filter(Boolean))].sort((a, b) => a - b),
-      diamond_types: [...new Set(variants.map(v => v.diamond_type).filter(Boolean))]
+      diamond_types: [...new Set(variants.map(v => v.diamond_type).filter(Boolean))],
+      metal_codes: [...new Set(variants.map(v => v.metal_code).filter(Boolean))],
+      shape_codes: [...new Set(variants.map(v => v.shape_code).filter(Boolean))]
     };
 
     res.json(options);
@@ -74,13 +115,24 @@ exports.createVariant = async (req, res, next) => {
   try {
     const variantData = req.body;
     
-    // Generate variantId if not provided
-    if (!variantData.variantId) {
-      variantData.variantId = `${variantData.productId}-${variantData.metal_type}-${variantData.carat}-${variantData.shape}`;
+    // If productSku is provided, find the product and set the ObjectId reference
+    if (variantData.productSku && !variantData.product) {
+      const product = await Product.findOne({ productSku: variantData.productSku });
+      if (product) {
+        variantData.product = product._id;
+      }
+    }
+    
+    // Generate variant_sku if not provided
+    if (!variantData.variant_sku) {
+      variantData.variant_sku = `${variantData.productSku}-${variantData.metal_type}-${variantData.carat}-${variantData.shape}`;
     }
 
     const variant = new Variant(variantData);
     await variant.save();
+    
+    // Populate product details for response
+    await variant.populate('product', 'productSku productName title');
     
     res.status(201).json(variant);
   } catch (err) {
@@ -94,7 +146,8 @@ exports.updateVariant = async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    const variant = await Variant.findByIdAndUpdate(id, updateData, { new: true });
+    const variant = await Variant.findByIdAndUpdate(id, updateData, { new: true })
+      .populate('product', 'productSku productName title');
     
     if (!variant) {
       return res.status(404).json({ message: 'Variant not found' });

@@ -17,5 +17,28 @@ router.post('/bulk-sku', auth, admin, upload.excel.single('file'), productContro
 // Update a specific product by id
 router.put('/:id', auth, admin, productController.updateProductByAdmin);
 
+// DEBUG: Get all variants for a product
+router.get('/:productSku/variants/debug', auth, admin, async (req, res) => {
+  try {
+    const Variant = require('../../models/admin/Variant');
+    const { productSku } = req.params;
+    const variants = await Variant.find({ productSku }).sort({ createdAt: 1 });
+    res.json({
+      productSku,
+      count: variants.length,
+      variants: variants.map(v => ({
+        variant_sku: v.variant_sku,
+        productSku: v.productSku,
+        metal_type: v.metal_type,
+        shape: v.shape,
+        carat: v.carat,
+        product: v.product
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 

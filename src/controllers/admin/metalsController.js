@@ -50,11 +50,11 @@ exports.getMetal = async (req, res, next) => {
   }
 };
 
-// Update metal
+// Update metal (rate_per_gram, price_multiplier, etc.)
 exports.updateMetal = async (req, res, next) => {
   try {
     const { metal_type } = req.params;
-    const updateData = req.body;
+    const { rate_per_gram, price_multiplier, metal_code, active } = req.body;
 
     // Try to find by metal_type first, then by ID
     let metal = await Metal.findOne({ metal_type });
@@ -66,10 +66,106 @@ exports.updateMetal = async (req, res, next) => {
       return res.status(404).json({ message: 'Metal not found' });
     }
 
-    Object.assign(metal, updateData);
+    // Store old values for logging
+    const oldValues = {
+      rate_per_gram: metal.rate_per_gram,
+      price_multiplier: metal.price_multiplier
+    };
+
+    // Update only provided fields
+    if (rate_per_gram !== undefined) metal.rate_per_gram = Number(rate_per_gram);
+    if (price_multiplier !== undefined) metal.price_multiplier = Number(price_multiplier);
+    if (metal_code !== undefined) metal.metal_code = metal_code;
+    if (active !== undefined) metal.active = Boolean(active);
+
     await metal.save();
 
-    res.json(metal);
+    // Log the update
+    console.log(`✅ Metal updated: ${metal_type}`);
+    console.log(`   Rate per gram: ${oldValues.rate_per_gram} → ${metal.rate_per_gram}`);
+    console.log(`   Price multiplier: ${oldValues.price_multiplier} → ${metal.price_multiplier}`);
+
+    res.json({
+      message: 'Metal updated successfully',
+      metal,
+      changes: {
+        rate_per_gram: {
+          old: oldValues.rate_per_gram,
+          new: metal.rate_per_gram
+        },
+        price_multiplier: {
+          old: oldValues.price_multiplier,
+          new: metal.price_multiplier
+        }
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Bulk update metals (for daily price updates)
+exports.bulkUpdateMetals = async (req, res, next) => {
+  try {
+    const { metals } = req.body; // Array of { metal_type, rate_per_gram, price_multiplier }
+
+    if (!Array.isArray(metals) || metals.length === 0) {
+      return res.status(400).json({ message: 'Please provide an array of metals to update' });
+    }
+
+    const results = {
+      updated: 0,
+      failed: 0,
+      details: []
+    };
+
+    for (const metalData of metals) {
+      try {
+        const { metal_type, rate_per_gram, price_multiplier } = metalData;
+        
+        if (!metal_type) {
+          results.failed++;
+          results.details.push({ metal_type: 'unknown', status: 'failed', error: 'metal_type is required' });
+          continue;
+        }
+
+        const metal = await Metal.findOne({ metal_type });
+        
+        if (!metal) {
+          results.failed++;
+          results.details.push({ metal_type, status: 'failed', error: 'Metal not found' });
+          continue;
+        }
+
+        const oldRate = metal.rate_per_gram;
+        const oldMultiplier = metal.price_multiplier;
+
+        if (rate_per_gram !== undefined) metal.rate_per_gram = Number(rate_per_gram);
+        if (price_multiplier !== undefined) metal.price_multiplier = Number(price_multiplier);
+
+        await metal.save();
+
+        results.updated++;
+        results.details.push({
+          metal_type,
+          status: 'success',
+          changes: {
+            rate_per_gram: { old: oldRate, new: metal.rate_per_gram },
+            price_multiplier: { old: oldMultiplier, new: metal.price_multiplier }
+          }
+        });
+
+        console.log(`✅ Bulk update: ${metal_type} - Rate: ${oldRate} → ${metal.rate_per_gram}, Multiplier: ${oldMultiplier} → ${metal.price_multiplier}`);
+      } catch (err) {
+        results.failed++;
+        results.details.push({ metal_type: metalData.metal_type, status: 'failed', error: err.message });
+      }
+    }
+
+    res.json({
+      message: `Bulk update completed: ${results.updated} succeeded, ${results.failed} failed`,
+      ...results
+    });
   } catch (err) {
     next(err);
   }

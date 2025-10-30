@@ -1,204 +1,443 @@
+const mongoose = require('mongoose');
 const Cart = require('../../models/user/Cart');
 const Variant = require('../../models/admin/Variant');
-const Order = require('../../models/user/Order');
+const Product = require('../../models/admin/Product');
+const DiamondSpec = require('../../models/admin/DiamondSpec');
+const Metal = require('../../models/admin/Metal');
 
-// Helper function to compute item price
-const computeItemPrice = async (item) => {
-  if (item.variantId) {
-    const variant = await Variant.findOne({ variantId: item.variantId });
-    if (!variant) throw new Error('Variant not found');
-    return (variant.price || 0) * (item.quantity || 1);
-  } else if (item.customBuild) {
-    return (item.customBuild.price || 0) * (item.quantity || 1);
-  }
-  return 0;
-};
-
-// Get user's cart
+/**
+ * Get user's cart
+ * GET /api/cart
+ */
 exports.getCart = async (req, res, next) => {
   try {
-    const { userId } = req.params;
+    const userId = req.user._id;
     
-    let cart = await Cart.findOne({ userId });
+    let cart = await Cart.findOne({ userId })
+      .populate({
+        path: 'items.variant',
+        select: 'variant_sku productSku metal_type shape carat price stock active'
+      })
+      .populate({
+        path: 'items.product',
+        select: 'productSku productName title default_price default_images active'
+      })
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color clarity price available active'
+      })
+      .lean();
+    
     if (!cart) {
       cart = await Cart.create({ userId, items: [] });
     }
     
-    res.json(cart);
+    res.json({
+      success: true,
+      cart
+    });
+    
   } catch (err) {
     next(err);
   }
 };
 
-// Add item to cart
-exports.addToCart = async (req, res, next) => {
+/**
+ * Add Ready-to-Ship (RTS) item to cart
+ * POST /api/cart/rts
+ */
+exports.addRTSToCart = async (req, res, next) => {
   try {
-    const { userId } = req.params;
-    const { variantId, quantity = 1, customBuild } = req.body;
-
-    if (!variantId && !customBuild) {
-      return res.status(400).json({ message: 'variantId or customBuild is required' });
-    }
-
-    let cart = await Cart.findOne({ userId });
-    if (!cart) {
-      cart = await Cart.create({ userId, items: [] });
-    }
-
-    // If variant: check if same variant exists then increment quantity
-    if (variantId) {
-      const existing = cart.items.find(i => i.variantId === variantId && !i.customBuild);
-      if (existing) {
-        existing.quantity += Number(quantity);
-      } else {
-        cart.items.push({ variantId, quantity: Number(quantity) });
-      }
-    } else {
-      // Custom build: treat as unique entry
-      cart.items.push({ customBuild: customBuild, quantity: Number(quantity) });
-    }
-
-    cart.updatedAt = Date.now();
-    await cart.save();
+    const userId = req.user._id;
+    const { variant_sku, variantId, quantity = 1, engraving, specialInstructions } = req.body;
     
-    res.json(cart);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Update cart item quantity
-exports.updateItem = async (req, res, next) => {
-  try {
-    const { userId, index } = req.params;
-    const { quantity } = req.body;
-    
-    const cart = await Cart.findOne({ userId });
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
-    
-    const idx = Number(index);
-    if (isNaN(idx) || !cart.items[idx]) {
-      return res.status(400).json({ message: 'Item not found' });
-    }
-    
-    if (quantity <= 0) {
-      cart.items.splice(idx, 1);
-    } else {
-      cart.items[idx].quantity = Number(quantity);
-    }
-    
-    cart.updatedAt = Date.now();
-    await cart.save();
-    
-    res.json(cart);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Remove item from cart
-exports.removeItem = async (req, res, next) => {
-  try {
-    const { userId, index } = req.params;
-    
-    const cart = await Cart.findOne({ userId });
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
-    
-    const idx = Number(index);
-    if (isNaN(idx) || !cart.items[idx]) {
-      return res.status(400).json({ message: 'Item not found' });
-    }
-    
-    cart.items.splice(idx, 1);
-    cart.updatedAt = Date.now();
-    await cart.save();
-    
-    res.json(cart);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Clear entire cart
-exports.clearCart = async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    
-    const cart = await Cart.findOneAndUpdate(
-      { userId }, 
-      { items: [], updatedAt: Date.now() }, 
-      { new: true, upsert: true }
-    );
-    
-    res.json(cart);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// Checkout cart
-exports.checkout = async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const { shipping = 0, taxes = 0, shippingAddress, paymentMethod } = req.body;
-
-    const cart = await Cart.findOne({ userId });
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: 'Cart is empty' });
-    }
-
-    // Compute subtotal
-    let subtotal = 0;
-    const orderItems = [];
-    
-    for (const item of cart.items) {
-      const linePrice = await computeItemPrice(item);
-      subtotal += linePrice;
-      orderItems.push({
-        variantId: item.variantId || null,
-        customBuild: item.customBuild || null,
-        quantity: item.quantity,
-        price: linePrice
+    if (!variant_sku && !variantId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'variant_sku or variantId is required' 
       });
     }
-
-    const total = subtotal + Number(shipping) + Number(taxes);
-    const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Create order
-    const order = await Order.create({
-      orderId,
-      userId,
-      items: orderItems,
-      subtotal,
-      shipping: Number(shipping),
-      taxes: Number(taxes),
-      total,
-      status: 'Pending',
-      shippingAddress,
-      paymentMethod,
-      paymentStatus: 'Pending'
+    
+    // Find variant
+    let variant;
+    if (variantId && mongoose.Types.ObjectId.isValid(variantId)) {
+      variant = await Variant.findById(variantId);
+    } else if (variant_sku) {
+      variant = await Variant.findOne({ variant_sku });
+    }
+    
+    if (!variant) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Variant not found' 
+      });
+    }
+    
+    if (!variant.active) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'This variant is not available' 
+      });
+    }
+    
+    if (variant.stock < quantity) {
+      return res.status(400).json({ 
+        success: false,
+        message: `Only ${variant.stock} items available in stock` 
+      });
+    }
+    
+    // Get or create cart
+    let cart = await Cart.findOne({ userId });
+    if (!cart) {
+      cart = new Cart({ userId, items: [] });
+    }
+    
+    // Check if variant already in cart
+    const existingItemIndex = cart.items.findIndex(
+      item => item.itemType === 'rts' && 
+              item.variant && 
+              item.variant.toString() === variant._id.toString()
+    );
+    
+    const pricePerItem = variant.price || 0;
+    const qty = Number(quantity);
+    const totalPrice = pricePerItem * qty;
+    
+    if (existingItemIndex >= 0) {
+      // Update existing item
+      const newQty = cart.items[existingItemIndex].quantity + qty;
+      
+      if (variant.stock < newQty) {
+        return res.status(400).json({ 
+          success: false,
+          message: `Cannot add more. Only ${variant.stock} items available in stock` 
+        });
+      }
+      
+      cart.items[existingItemIndex].quantity = newQty;
+      cart.items[existingItemIndex].totalPrice = pricePerItem * newQty;
+      if (engraving) cart.items[existingItemIndex].engraving = engraving;
+      if (specialInstructions) cart.items[existingItemIndex].specialInstructions = specialInstructions;
+    } else {
+      // Add new item
+      cart.items.push({
+        itemType: 'rts',
+        variant: variant._id,
+        variant_sku: variant.variant_sku,
+        quantity: qty,
+        pricePerItem,
+        totalPrice,
+        engraving,
+        specialInstructions
+      });
+    }
+    
+    await cart.save();
+    
+    // Populate and return
+    cart = await Cart.findById(cart._id)
+      .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
+      .populate('items.product', 'productSku productName title default_price')
+      .lean();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Item added to cart',
+      cart
     });
+    
+  } catch (err) {
+    next(err);
+  }
+};
 
-    // Decrease variant stock for variant items
-    for (const item of cart.items) {
-      if (item.variantId) {
-        await Variant.updateOne(
-          { variantId: item.variantId }, 
-          { $inc: { stock: -Math.max(1, item.quantity) } }
-        );
+/**
+ * Add Design-Your-Own (DYO) item to cart
+ * POST /api/cart/dyo
+ */
+exports.addDYOToCart = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { 
+      productSku, 
+      productId,
+      selectedMetal, 
+      selectedShape, 
+      selectedCarat,
+      diamondSku,
+      diamondId,
+      quantity = 1,
+      engraving,
+      specialInstructions
+    } = req.body;
+    
+    if (!productSku && !productId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'productSku or productId is required' 
+      });
+    }
+    
+    // Find product
+    let product;
+    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+      product = await Product.findById(productId);
+    } else if (productSku) {
+      product = await Product.findOne({ productSku });
+    }
+    
+    if (!product) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Product not found' 
+      });
+    }
+    
+    if (!product.active) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'This product is not available' 
+      });
+    }
+    
+    // Find diamond if specified
+    let diamond = null;
+    if (diamondId || diamondSku) {
+      if (diamondId && mongoose.Types.ObjectId.isValid(diamondId)) {
+        diamond = await DiamondSpec.findById(diamondId);
+      } else if (diamondSku) {
+        diamond = await DiamondSpec.findOne({ sku: diamondSku });
+      }
+      
+      if (!diamond) {
+        return res.status(404).json({ 
+          success: false,
+          message: 'Diamond not found' 
+        });
+      }
+      
+      if (!diamond.active || !diamond.available) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Selected diamond is not available' 
+        });
       }
     }
-
-    // Clear cart
-    cart.items = [];
+    
+    // Calculate price
+    let pricePerItem = product.default_price || 0;
+    
+    // Add diamond price if selected
+    if (diamond) {
+      pricePerItem += diamond.price || 0;
+    }
+    
+    // Add metal price difference if applicable
+    if (selectedMetal) {
+      const metal = await Metal.findOne({ metal_type: selectedMetal });
+      if (metal && metal.price_multiplier) {
+        // Apply metal multiplier to base price
+        pricePerItem = pricePerItem * metal.price_multiplier;
+      }
+    }
+    
+    const qty = Number(quantity);
+    const totalPrice = pricePerItem * qty;
+    
+    // Get or create cart
+    let cart = await Cart.findOne({ userId });
+    if (!cart) {
+      cart = new Cart({ userId, items: [] });
+    }
+    
+    // Add new DYO item (each DYO is unique)
+    cart.items.push({
+      itemType: 'dyo',
+      product: product._id,
+      productSku: product.productSku,
+      selectedMetal,
+      selectedShape,
+      selectedCarat: selectedCarat ? Number(selectedCarat) : undefined,
+      selectedDiamond: diamond ? diamond._id : undefined,
+      diamondSku: diamond ? diamond.sku : undefined,
+      quantity: qty,
+      pricePerItem,
+      totalPrice,
+      engraving,
+      specialInstructions
+    });
+    
     await cart.save();
+    
+    // Populate and return
+    cart = await Cart.findById(cart._id)
+      .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
+      .populate('items.product', 'productSku productName title default_price')
+      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .lean();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Custom item added to cart',
+      cart
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+};
 
-    res.json({ order });
+/**
+ * Update cart item quantity
+ * PUT /api/cart/items/:itemId
+ */
+exports.updateCartItem = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { itemId } = req.params;
+    const { quantity } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(itemId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid item ID' 
+      });
+    }
+    
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Cart not found' 
+      });
+    }
+    
+    const item = cart.items.id(itemId);
+    if (!item) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Item not found in cart' 
+      });
+    }
+    
+    const newQty = Number(quantity);
+    
+    if (newQty <= 0) {
+      // Remove item
+      cart.items.pull(itemId);
+    } else {
+      // Check stock for RTS items
+      if (item.itemType === 'rts' && item.variant) {
+        const variant = await Variant.findById(item.variant);
+        if (variant && variant.stock < newQty) {
+          return res.status(400).json({ 
+            success: false,
+            message: `Only ${variant.stock} items available in stock` 
+          });
+        }
+      }
+      
+      // Update quantity and total price
+      item.quantity = newQty;
+      item.totalPrice = item.pricePerItem * newQty;
+    }
+    
+    await cart.save();
+    
+    // Populate and return
+    const updatedCart = await Cart.findById(cart._id)
+      .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
+      .populate('items.product', 'productSku productName title default_price')
+      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .lean();
+    
+    res.json({
+      success: true,
+      message: newQty <= 0 ? 'Item removed from cart' : 'Cart updated',
+      cart: updatedCart
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Remove item from cart
+ * DELETE /api/cart/items/:itemId
+ */
+exports.removeFromCart = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { itemId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(itemId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid item ID' 
+      });
+    }
+    
+    const cart = await Cart.findOne({ userId });
+    if (!cart) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Cart not found' 
+      });
+    }
+    
+    const item = cart.items.id(itemId);
+    if (!item) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Item not found in cart' 
+      });
+    }
+    
+    cart.items.pull(itemId);
+    await cart.save();
+    
+    // Populate and return
+    const updatedCart = await Cart.findById(cart._id)
+      .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
+      .populate('items.product', 'productSku productName title default_price')
+      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .lean();
+    
+    res.json({
+      success: true,
+      message: 'Item removed from cart',
+      cart: updatedCart
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Clear entire cart
+ * DELETE /api/cart
+ */
+exports.clearCart = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    
+    let cart = await Cart.findOne({ userId });
+    if (!cart) {
+      cart = await Cart.create({ userId, items: [] });
+    } else {
+      cart.items = [];
+      await cart.save();
+    }
+    
+    res.json({
+      success: true,
+      message: 'Cart cleared',
+      cart
+    });
+    
   } catch (err) {
     next(err);
   }

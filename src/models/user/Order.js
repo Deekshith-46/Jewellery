@@ -1,68 +1,189 @@
 const mongoose = require('mongoose');
 
 const OrderItemSchema = new mongoose.Schema({
-  // Either variantId OR customBuild should be present
-  variantId: String,
-  customBuild: mongoose.Schema.Types.Mixed,
+  // Item type: 'rts' (Ready-to-Ship) or 'dyo' (Design-Your-Own)
+  itemType: {
+    type: String,
+    enum: ['rts', 'dyo'],
+    required: true
+  },
   
-  // Item details
-  quantity: { type: Number, default: 1 },
-  price: Number, // price at time of order
+  // For RTS: Variant reference
+  variant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Variant'
+  },
+  variant_sku: String,
   
-  // Additional metadata
-  metadata: mongoose.Schema.Types.Mixed
-}, { _id: false });
+  // For DYO: Product + selections
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  },
+  productSku: String,
+  productName: String,
+  
+  // DYO selections (stored for order history)
+  selectedMetal: String,
+  selectedShape: String,
+  selectedCarat: Number,
+  selectedDiamond: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'DiamondSpec'
+  },
+  diamondSku: String,
+  
+  // Order item details
+  quantity: { 
+    type: Number, 
+    required: true,
+    min: 1 
+  },
+  pricePerItem: { 
+    type: Number, 
+    required: true 
+  },
+  totalPrice: { 
+    type: Number, 
+    required: true 
+  },
+  
+  // Optional customizations
+  engraving: String,
+  specialInstructions: String,
+  
+  // Snapshot of item details at time of order
+  itemSnapshot: {
+    title: String,
+    description: String,
+    images: [String],
+    specifications: mongoose.Schema.Types.Mixed
+  }
+}, { _id: true, timestamps: true });
 
 const OrderSchema = new mongoose.Schema({
   // Unique order identifier
-  orderId: { type: String, unique: true, required: true },
+  orderId: { 
+    type: String, 
+    unique: true, 
+    required: true,
+    index: true
+  },
   
-  // User identifier
-  userId: { type: String, required: true, index: true },
+  // User reference
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
+    required: true, 
+    index: true 
+  },
   
   // Order items
   items: [OrderItemSchema],
   
   // Pricing breakdown
-  subtotal: Number,
-  shipping: { type: Number, default: 0 },
-  taxes: { type: Number, default: 0 },
-  total: Number,
+  subtotal: { 
+    type: Number, 
+    required: true 
+  },
+  shippingCost: { 
+    type: Number, 
+    default: 0 
+  },
+  taxes: { 
+    type: Number, 
+    default: 0 
+  },
+  discount: { 
+    type: Number, 
+    default: 0 
+  },
+  total: { 
+    type: Number, 
+    required: true 
+  },
   
   // Order status
   status: { 
     type: String, 
-    enum: ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'],
-    default: 'Pending' 
+    enum: ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Refunded'],
+    default: 'Pending',
+    index: true
   },
+  
+  // Contact information
+  contactEmail: {
+    type: String,
+    required: true
+  },
+  contactPhone: String,
   
   // Shipping information
   shippingAddress: {
-    name: String,
-    street: String,
+    firstName: String,
+    lastName: String,
+    address: String,
     city: String,
     state: String,
-    zipCode: String,
+    postalCode: String,
     country: String,
     phone: String
   },
   
-  // Payment information
-  paymentMethod: String,
-  paymentStatus: { 
-    type: String, 
-    enum: ['Pending', 'Paid', 'Failed', 'Refunded'],
-    default: 'Pending' 
+  // Billing address (if different)
+  billingAddress: {
+    firstName: String,
+    lastName: String,
+    address: String,
+    city: String,
+    state: String,
+    postalCode: String,
+    country: String
   },
   
-  // Additional metadata
+  // Payment information
+  paymentMethod: {
+    type: String,
+    enum: ['Credit Card', 'Debit Card', 'PayPal', 'Bank Transfer', 'Cash on Delivery'],
+    required: true
+  },
+  paymentStatus: { 
+    type: String, 
+    enum: ['Pending', 'Paid', 'Failed', 'Refunded', 'Partially Refunded'],
+    default: 'Pending',
+    index: true
+  },
+  transactionId: String,
+  
+  // Shipping details
+  shippingMethod: String,
+  trackingNumber: String,
+  estimatedDelivery: Date,
+  actualDelivery: Date,
+  
+  // Additional notes
+  customerNotes: String,
+  adminNotes: String,
+  
+  // Metadata
   metadata: mongoose.Schema.Types.Mixed
 }, { timestamps: true });
 
 // Indexes for efficient queries
 OrderSchema.index({ orderId: 1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
-OrderSchema.index({ status: 1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ paymentStatus: 1 });
+OrderSchema.index({ createdAt: -1 });
+
+// Generate unique order ID before saving
+OrderSchema.pre('save', function(next) {
+  if (!this.orderId) {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    this.orderId = `ORD-${timestamp}-${random}`;
+  }
+  next();
+});
 
 module.exports = mongoose.model('Order', OrderSchema);

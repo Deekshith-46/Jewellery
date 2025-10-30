@@ -321,6 +321,42 @@
             },
             "description": "Calculate price for a product based on metal selection and quantity"
           }
+        },
+        {
+          "name": "Get Images for DYO Selection (NEW)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/RING-001/images?metal=14Y&shape=RND",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "RING-001", "images"],
+              "query": [
+                {
+                  "key": "metal",
+                  "value": "14Y",
+                  "description": "Metal code (14Y, 14W, 14R, 18Y, 18W, P)"
+                },
+                {
+                  "key": "shape",
+                  "value": "RND",
+                  "description": "Shape code (RND, OVL, PRN, CUS, EMR, RAD, ASH, MAR, HRT, PEA, BAG)"
+                }
+              ]
+            },
+            "description": "Get 4 generated image URLs for Design Your Own based on user's metal + shape selection. Returns array of 4 image URLs built from template."
+          }
+        },
+        {
+          "name": "Get Images for RTS Variant (NEW)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/products/RING-001/variants/RING-246-14k_rose_gold-2.01-Baguette/images",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products", "RING-001", "variants", "RING-246-14k_rose_gold-2.01-Baguette", "images"]
+            },
+            "description": "Get 4 generated image URLs for Ready To Ship variant. Uses variant's metal_code and shape_code to generate images from product template."
+          }
         }
       ]
     },
@@ -459,7 +495,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "admin", "products", "bulk-sku"]
             },
-            "description": "Bulk upload/update products via Excel file. Required columns: productSku, product_name. Optional: description, categories, style, stock, metal_type, shape, metal_weight, metal_cost, metal_price, availability, defaultImg_1, defaultImg_2, variant1-4, availableMetalTypes, availableShapes, readyToShip, engravingAllowed, active."
+            "description": "Bulk upload ALL 5 sheets from Excel: Products, Variants, Images, Metals, Lookups.\n\n**Products Sheet:** productSku, product_name, description, categories, style, main_shape, readyToShip, default_price, engravingAllowed, active, use_all_metals, availableMetalTypes, use_all_shapes, availableShapes, angles, base_path, filename_template, metals_expanded, shapes_expanded\n\n**Variants Sheet:** productSku, variant_sku, metal_type, metal_code, carat, shape, shape_code, diamond_type, price, weight_metal, metal_cost, stock, readyToShip, active\n\n**Images Sheet:** productSku, variant_sku, image_url, alt_text, active\n\n**Metals Sheet:** metal_type, rate_per_gram, price_multiplier\n\n**Lookups Sheet:** Reference data (not stored in DB)"
           }
         }
       ]
