@@ -3,11 +3,9 @@ const express = require('express');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const cors = require('cors');
-const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
-connectDB();
 
 // register models
 require('./models/user');

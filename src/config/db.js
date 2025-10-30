@@ -2,7 +2,9 @@ const mongoose = require('mongoose');
 
 let MONGO_URI = process.env.MONGODB_URI;
 // strip surrounding quotes if present (some .env values include them)
-MONGO_URI = MONGO_URI.replace(/^"(.*)"$/, '$1');
+if (MONGO_URI) {
+  MONGO_URI = MONGO_URI.replace(/^"(.*)"$/, '$1');
+}
 
 // Helper function to drop old/invalid indexes
 const dropOldIndexes = async () => {
@@ -87,6 +89,16 @@ const dropOldIndexes = async () => {
 
 const connectDB = async () => {
   try {
+    if (!MONGO_URI) {
+      throw new Error('MONGODB_URI environment variable is not defined');
+    }
+    
+    // Avoid multiple connections in serverless environment
+    if (mongoose.connection.readyState >= 1) {
+      console.log('MongoDB already connected');
+      return;
+    }
+    
     await mongoose.connect(MONGO_URI, {
       dbName: undefined,
       serverSelectionTimeoutMS: 5000,
@@ -94,12 +106,15 @@ const connectDB = async () => {
     });
     console.log('MongoDB connected');
     
-    // Drop old indexes after connection
-    await dropOldIndexes();
+    // Drop old indexes after connection (only if not in production/serverless)
+    if (process.env.NODE_ENV !== 'production') {
+      await dropOldIndexes();
+    }
     
   } catch (err) {
     console.error('MongoDB connection error:', err.message);
-    process.exit(1);
+    // In serverless functions, throw error instead of process.exit()
+    throw new Error(`Failed to connect to MongoDB: ${err.message}`);
   }
 };
 
