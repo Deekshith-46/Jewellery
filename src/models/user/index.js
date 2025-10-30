@@ -1,7 +1,7 @@
 require('./User');
 require('./Address');
 require('./Order');
-require('./OrderItem');
+require('./Cart');
 require('./WishlistItem');
 require('./Contact');
 
