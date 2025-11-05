@@ -48,6 +48,13 @@ const OrderItemSchema = new mongoose.Schema({
     required: true 
   },
   
+  // Price breakdown for DYO items (stored at order time for history)
+  priceBreakdown: {
+    metal_cost: Number,          // Metal cost = rate_per_gram × metal_weight
+    diamond_price: Number,       // Diamond price from Diamonds table
+    metal_weight: Number         // Metal weight in grams
+  },
+  
   // Optional customizations
   engraving: String,
   specialInstructions: String,
@@ -62,11 +69,10 @@ const OrderItemSchema = new mongoose.Schema({
 }, { _id: true, timestamps: true });
 
 const OrderSchema = new mongoose.Schema({
-  // Unique order identifier
+  // Unique order identifier (auto-generated in pre-save hook)
   orderId: { 
     type: String, 
     unique: true, 
-    required: true,
     index: true
   },
   
@@ -153,7 +159,13 @@ const OrderSchema = new mongoose.Schema({
     default: 'Pending',
     index: true
   },
+  isPaid: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   transactionId: String,
+  paidAt: Date,
   
   // Shipping details
   shippingMethod: String,

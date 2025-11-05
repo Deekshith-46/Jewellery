@@ -20,16 +20,42 @@ exports.getCart = async (req, res, next) => {
       })
       .populate({
         path: 'items.product',
-        select: 'productSku productName title default_price default_images active'
+        select: 'productSku productName title default_price description main_shape style active'
       })
       .populate({
         path: 'items.selectedDiamond',
-        select: 'sku shape carat cut color clarity price available active'
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab available active',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
       })
       .lean();
     
     if (!cart) {
       cart = await Cart.create({ userId, items: [] });
+    }
+    
+    // Clean up response - ensure only selected values are returned
+    // Remove any full product objects with all available options
+    if (cart.items) {
+      cart.items = cart.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Return product info (but not all available options like availableMetalTypes)
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            default_price: item.product.default_price,
+            description: item.product.description,
+            main_shape: item.product.main_shape,
+            style: item.product.style
+          };
+          // Ensure only selected values are visible
+          // selectedMetal, selectedShape, selectedCarat are already correct
+        }
+        return item;
+      });
     }
     
     res.json({
@@ -135,11 +161,28 @@ exports.addRTSToCart = async (req, res, next) => {
     
     await cart.save();
     
-    // Populate and return
+    // Populate and return - only selected fields
     cart = await Cart.findById(cart._id)
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
-      .populate('items.product', 'productSku productName title default_price')
+      .populate('items.product', 'productSku productName title default_price') // Minimal product info
+      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
       .lean();
+    
+    // Clean up - ensure only selected values are returned
+    if (cart.items) {
+      cart.items = cart.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Only return minimal product info, not full product with all options
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            default_price: item.product.default_price
+          };
+        }
+        return item;
+      });
+    }
     
     res.status(200).json({
       success: true,
@@ -225,25 +268,43 @@ exports.addDYOToCart = async (req, res, next) => {
       }
     }
     
-    // Calculate price
-    let pricePerItem = product.default_price || 0;
+    // Calculate price with detailed breakdown for DYO items
+    const diamond_price = diamond ? (diamond.price || 0) : 0;
+    let metal_cost = 0;
+    let metal_weight = 0;
     
-    // Add diamond price if selected
-    if (diamond) {
-      pricePerItem += diamond.price || 0;
-    }
-    
-    // Add metal price difference if applicable
+    // Calculate metal cost if metal is selected
     if (selectedMetal) {
-      const metal = await Metal.findOne({ metal_type: selectedMetal });
-      if (metal && metal.price_multiplier) {
-        // Apply metal multiplier to base price
-        pricePerItem = pricePerItem * metal.price_multiplier;
+      // Try to find metal by metal_type (exact match or normalized)
+      let metal = await Metal.findOne({ metal_type: selectedMetal });
+      
+      // If not found, try case-insensitive search
+      if (!metal) {
+        metal = await Metal.findOne({ 
+          metal_type: { $regex: new RegExp(`^${selectedMetal}$`, 'i') } 
+        });
+      }
+      
+      if (metal) {
+        // Get metal weight from product metadata or use default
+        metal_weight = product.metadata?.metal_weight || product.metadata?.weight || 5; // default 5g if not specified
+        metal_cost = (metal.rate_per_gram || 0) * metal_weight;
+      } else {
+        console.warn(`Metal not found: ${selectedMetal}`);
       }
     }
     
+    // Total price per item = metal + diamond (setting_price removed)
+    const pricePerItem = metal_cost + diamond_price;
     const qty = Number(quantity);
     const totalPrice = pricePerItem * qty;
+    
+    // Price breakdown for DYO items
+    const priceBreakdown = {
+      metal_cost,
+      diamond_price,
+      metal_weight
+    };
     
     // Get or create cart
     let cart = await Cart.findOne({ userId });
@@ -264,18 +325,42 @@ exports.addDYOToCart = async (req, res, next) => {
       quantity: qty,
       pricePerItem,
       totalPrice,
+      priceBreakdown,
       engraving,
       specialInstructions
     });
     
     await cart.save();
     
-    // Populate and return
+    // Populate and return - only selected fields
     cart = await Cart.findById(cart._id)
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
-      .populate('items.product', 'productSku productName title default_price')
-      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .populate('items.product', 'productSku productName title default_price description main_shape style') // Product info
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
+      })
       .lean();
+    
+    // Clean up - ensure only selected values are returned
+    if (cart.items) {
+      cart.items = cart.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Only return minimal product info, not full product with all options
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            default_price: item.product.default_price
+          };
+        }
+        return item;
+      });
+    }
     
     res.status(200).json({
       success: true,
@@ -345,12 +430,35 @@ exports.updateCartItem = async (req, res, next) => {
     
     await cart.save();
     
-    // Populate and return
+    // Populate and return - only selected fields
     const updatedCart = await Cart.findById(cart._id)
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
-      .populate('items.product', 'productSku productName title default_price')
-      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .populate('items.product', 'productSku productName title default_price description main_shape style')
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
+      })
       .lean();
+    
+    // Clean up - ensure only selected values are returned
+    if (updatedCart.items) {
+      updatedCart.items = updatedCart.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Only return minimal product info, not full product with all options
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            default_price: item.product.default_price
+          };
+        }
+        return item;
+      });
+    }
     
     res.json({
       success: true,
@@ -398,12 +506,35 @@ exports.removeFromCart = async (req, res, next) => {
     cart.items.pull(itemId);
     await cart.save();
     
-    // Populate and return
+    // Populate and return - only selected fields
     const updatedCart = await Cart.findById(cart._id)
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
-      .populate('items.product', 'productSku productName title default_price')
-      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .populate('items.product', 'productSku productName title default_price description main_shape style')
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
+      })
       .lean();
+    
+    // Clean up - ensure only selected values are returned
+    if (updatedCart.items) {
+      updatedCart.items = updatedCart.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Only return minimal product info, not full product with all options
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            default_price: item.product.default_price
+          };
+        }
+        return item;
+      });
+    }
     
     res.json({
       success: true,

@@ -8,6 +8,10 @@ const DiamondSpec = require('../../models/admin/DiamondSpec');
 /**
  * Checkout from cart and create order
  * POST /api/orders/checkout
+ * 
+ * Tax and shipping are calculated automatically:
+ * - Tax: 9% of subtotal (configurable via TAX_RATE env var)
+ * - Shipping: Free for orders > 50000, else 500 (configurable via SHIPPING_* env vars)
  */
 exports.checkoutFromCart = async (req, res, next) => {
   try {
@@ -18,8 +22,6 @@ exports.checkoutFromCart = async (req, res, next) => {
       shippingAddress,
       billingAddress,
       paymentMethod,
-      shippingCost = 0,
-      taxes = 0,
       discount = 0,
       customerNotes
     } = req.body;
@@ -98,6 +100,15 @@ exports.checkoutFromCart = async (req, res, next) => {
         specialInstructions: cartItem.specialInstructions
       };
       
+      // Copy price breakdown if available (for DYO items)
+      if (cartItem.priceBreakdown) {
+        orderItem.priceBreakdown = {
+          metal_cost: cartItem.priceBreakdown.metal_cost,
+          diamond_price: cartItem.priceBreakdown.diamond_price,
+          metal_weight: cartItem.priceBreakdown.metal_weight
+        };
+      }
+      
       if (cartItem.itemType === 'rts') {
         // Ready-to-Ship item
         orderItem.variant = cartItem.variant._id;
@@ -114,10 +125,12 @@ exports.checkoutFromCart = async (req, res, next) => {
           }
         };
       } else {
-        // Design-Your-Own item
+        // Design-Your-Own item - ONLY store user-selected values
         orderItem.product = cartItem.product._id;
         orderItem.productSku = cartItem.productSku;
-        orderItem.productName = cartItem.product.productName;
+        orderItem.productName = cartItem.product.productName || cartItem.product.title;
+        
+        // Store ONLY user-selected values
         orderItem.selectedMetal = cartItem.selectedMetal;
         orderItem.selectedShape = cartItem.selectedShape;
         orderItem.selectedCarat = cartItem.selectedCarat;
@@ -127,35 +140,65 @@ exports.checkoutFromCart = async (req, res, next) => {
           orderItem.diamondSku = cartItem.diamondSku;
         }
         
-        // Snapshot
+        // Snapshot - ONLY user-selected details (not all product options)
         orderItem.itemSnapshot = {
           title: cartItem.product.productName || cartItem.product.title,
-          description: cartItem.product.description,
-          images: cartItem.product.default_images || [],
+          // Only description from product (general info)
+          description: cartItem.product.description || '',
+          // Only images if available (but not all product metadata)
+          images: [],
           specifications: {
+            // ONLY the user's selections
             metal: cartItem.selectedMetal,
             shape: cartItem.selectedShape,
             carat: cartItem.selectedCarat,
             diamond: cartItem.selectedDiamond ? {
               sku: cartItem.selectedDiamond.sku,
-              shape: cartItem.selectedDiamond.shape,
+              shape: cartItem.selectedDiamond.shape?.label || cartItem.selectedDiamond.shape?.code || cartItem.selectedDiamond.shape,
               carat: cartItem.selectedDiamond.carat,
               cut: cartItem.selectedDiamond.cut,
               color: cartItem.selectedDiamond.color,
-              clarity: cartItem.selectedDiamond.clarity
-            } : null
+              purity: cartItem.selectedDiamond.purity,
+              polish: cartItem.selectedDiamond.polish,
+              symmetry: cartItem.selectedDiamond.symmetry,
+              fluorescence: cartItem.selectedDiamond.fluorescence,
+              price: cartItem.selectedDiamond.price,
+              pricePerCarat: cartItem.selectedDiamond.pricePerCarat,
+              certNumber: cartItem.selectedDiamond.certNumber,
+              imageUrl: cartItem.selectedDiamond.imageUrl,
+              videoUrl: cartItem.selectedDiamond.videoUrl
+            } : null,
+            // Include price breakdown
+            priceBreakdown: orderItem.priceBreakdown
           }
         };
+        
+        // DO NOT include product metadata like:
+        // - availableMetalTypes (all available metals)
+        // - availableShapes (all available shapes)
+        // - useAllMetals, useAllShapes (product configuration flags)
+        // Only store what the USER selected!
       }
       
       orderItems.push(orderItem);
       subtotal += cartItem.totalPrice;
     }
     
-    // Calculate total
-    const shipping = Number(shippingCost) || 0;
-    const tax = Number(taxes) || 0;
+    // Auto-calculate tax and shipping
+    // Tax calculation (default 9%, configurable via env var)
+    const TAX_RATE = Number(process.env.TAX_RATE) || 0.09; // 9% GST/VAT
+    const tax = Math.round(subtotal * TAX_RATE);
+    
+    // Shipping calculation (configurable via env vars)
+    const FREE_SHIPPING_THRESHOLD = Number(process.env.FREE_SHIPPING_THRESHOLD) || 50000;
+    const STANDARD_SHIPPING_COST = Number(process.env.STANDARD_SHIPPING_COST) || 500;
+    
+    const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING_COST;
+    
+    // Discount
     const disc = Number(discount) || 0;
+    
+    // Total calculation
     const total = subtotal + shipping + tax - disc;
     
     // Create order
@@ -193,12 +236,39 @@ exports.checkoutFromCart = async (req, res, next) => {
     cart.items = [];
     await cart.save();
     
-    // Populate order for response
+    // Populate order for response - ONLY selected fields
     const populatedOrder = await Order.findById(order._id)
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
-      .populate('items.product', 'productSku productName title')
-      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .populate('items.product', 'productSku productName title description main_shape style') // Product info
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
+      })
       .lean();
+    
+    // Clean up response - ensure only selected values are returned
+    // Remove any full product objects with all options
+    if (populatedOrder.items) {
+      populatedOrder.items = populatedOrder.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Return product info (but not all available options like availableMetalTypes)
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title,
+            description: item.product.description,
+            main_shape: item.product.main_shape,
+            style: item.product.style
+          };
+          // Ensure only selected values are visible
+        }
+        return item;
+      });
+    }
     
     res.status(201).json({
       success: true,
@@ -232,19 +302,44 @@ exports.getUserOrders = async (req, res, next) => {
       .skip(skip)
       .limit(Number(limit))
       .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
-      .populate('items.product', 'productSku productName title')
-      .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
+      .populate('items.product', 'productSku productName title description main_shape style') // Product info
+      .populate({
+        path: 'items.selectedDiamond',
+        select: 'sku shape carat cut color purity polish symmetry fluorescence price pricePerCarat certNumber certUrl imageUrl videoUrl measurement ratio lab',
+        populate: {
+          path: 'shape',
+          select: 'code label'
+        }
+      })
       .lean();
+    
+    // Clean up - ensure only selected values are returned
+    const cleanedOrders = orders.map(order => {
+      if (order.items) {
+        order.items = order.items.map(item => {
+          if (item.itemType === 'dyo' && item.product) {
+            // Only return minimal product info, not full product with all options
+            item.product = {
+              _id: item.product._id,
+              productSku: item.product.productSku,
+              productName: item.product.productName || item.product.title
+            };
+          }
+          return item;
+        });
+      }
+      return order;
+    });
     
     const total = await Order.countDocuments(query);
     
     res.json({
       success: true,
-      count: orders.length,
+      count: cleanedOrders.length,
       total,
       page: Number(page),
       pages: Math.ceil(total / Number(limit)),
-      orders
+      orders: cleanedOrders
     });
     
   } catch (err) {
@@ -276,10 +371,29 @@ exports.getOrderById = async (req, res, next) => {
       });
     }
     
-    // Populate references
+    // Populate references - ONLY selected fields
     await order.populate('items.variant', 'variant_sku productSku metal_type shape carat price');
-    await order.populate('items.product', 'productSku productName title');
+    await order.populate('items.product', 'productSku productName title'); // Minimal product info only
     await order.populate('items.selectedDiamond', 'sku shape carat cut color clarity price');
+    
+    // Convert to JSON and clean up - remove full product objects with all options
+    const orderObj = order.toObject();
+    if (orderObj.items) {
+      orderObj.items = orderObj.items.map(item => {
+        if (item.itemType === 'dyo' && item.product) {
+          // Only return minimal product info, not full product with all options
+          item.product = {
+            _id: item.product._id,
+            productSku: item.product.productSku,
+            productName: item.product.productName || item.product.title
+          };
+          // Ensure only selected values are visible in response
+        }
+        return item;
+      });
+    }
+    
+    order = orderObj;
     
     res.json({
       success: true,
@@ -332,6 +446,61 @@ exports.cancelOrder = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Order cancelled successfully',
+      order
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Update payment status (for payment gateway webhooks)
+ * PUT /api/orders/:orderId/payment-status
+ * 
+ * This endpoint should be called by your payment gateway webhook
+ * or by an admin after confirming payment
+ */
+exports.updatePaymentStatus = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentStatus, transactionId, isPaid } = req.body;
+    
+    // Find order (no userId check for webhook)
+    const order = await Order.findOne({ orderId });
+    
+    if (!order) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+    }
+    
+    // Update payment fields
+    if (paymentStatus) {
+      order.paymentStatus = paymentStatus;
+    }
+    
+    if (transactionId) {
+      order.transactionId = transactionId;
+    }
+    
+    if (isPaid !== undefined) {
+      order.isPaid = isPaid;
+      if (isPaid) {
+        order.paidAt = new Date();
+        // Auto-confirm order when paid
+        if (order.status === 'Pending') {
+          order.status = 'Confirmed';
+        }
+      }
+    }
+    
+    await order.save();
+    
+    res.json({
+      success: true,
+      message: 'Payment status updated successfully',
       order
     });
     

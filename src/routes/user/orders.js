@@ -15,4 +15,9 @@ router.get('/:orderId', auth, orderController.getOrderById);
 // Cancel order
 router.put('/:orderId/cancel', auth, orderController.cancelOrder);
 
+// Update payment status (for webhooks or admin)
+// Note: For production webhooks, you may want to skip 'auth' middleware
+// and use webhook signature verification instead
+router.put('/:orderId/payment-status', orderController.updatePaymentStatus);
+
 module.exports = router;

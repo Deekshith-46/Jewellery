@@ -43,6 +43,13 @@ const CartItemSchema = new mongoose.Schema({
   pricePerItem: Number,
   totalPrice: Number,
   
+  // Price breakdown for DYO items
+  priceBreakdown: {
+    metal_cost: Number,          // Metal cost = rate_per_gram × metal_weight
+    diamond_price: Number,       // Diamond price from Diamonds table
+    metal_weight: Number         // Metal weight in grams
+  },
+  
   // Optional customizations
   engraving: String,
   specialInstructions: String,

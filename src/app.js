@@ -37,6 +37,7 @@ app.use('/api/admin/diamonds', require('./routes/admin/diamonds'));
 app.use('/api/admin/orders', require('./routes/admin/orders'));
 app.use('/api/admin/variants', require('./routes/admin/variants'));
 app.use('/api/admin/metals', require('./routes/admin/metals'));
+app.use('/api/admin/images', require('./routes/admin/images'));
 
 // error handler (last)
 app.use(errorHandler);

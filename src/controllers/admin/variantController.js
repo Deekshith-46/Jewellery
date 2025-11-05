@@ -40,6 +40,75 @@ exports.findVariant = async (req, res, next) => {
   }
 };
 
+// Get all variants (with query parameter support)
+exports.getAllVariants = async (req, res, next) => {
+  try {
+    const { productSku, productId, readyToShip, active, inStock, metal_type, shape, page = 1, limit = 50 } = req.query;
+
+    const query = {};
+    
+    // Filter by productSku or productId
+    if (productSku) {
+      query.productSku = productSku;
+    } else if (productId) {
+      if (mongoose.Types.ObjectId.isValid(productId)) {
+        query.product = productId;
+      } else {
+        query.productSku = productId;
+      }
+    }
+    
+    // Filter by readyToShip
+    if (readyToShip !== undefined) {
+      query.readyToShip = readyToShip === 'true';
+    }
+    
+    // Filter by active status
+    if (active !== undefined) {
+      query.active = active === 'true';
+    } else {
+      query.active = true; // Default to active only
+    }
+    
+    // Filter by stock
+    if (inStock === 'true') {
+      query.stock = { $gt: 0 };
+    }
+    
+    // Filter by metal_type
+    if (metal_type) {
+      query.metal_type = metal_type;
+    }
+    
+    // Filter by shape
+    if (shape) {
+      query.shape = shape;
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    
+    const [variants, total] = await Promise.all([
+      Variant.find(query)
+        .populate('product', 'productSku productName title')
+        .sort({ metal_type: 1, carat: 1, shape: 1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      Variant.countDocuments(query)
+    ]);
+    
+    res.json({
+      success: true,
+      count: variants.length,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      variants
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Get all variants for a product
 exports.getVariantsByProduct = async (req, res, next) => {
   try {
