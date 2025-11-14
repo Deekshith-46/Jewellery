@@ -8,7 +8,7 @@ const ImageSchema = new mongoose.Schema({
   productSku: { type: String, index: true },
   
   // Reference to variant (ObjectId reference, nullable)
-  variant: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant', index: true },
+  variant: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpandedVariant', index: true },
   
   // Also store variant_sku for easy lookup
   variant_sku: { type: String, index: true },

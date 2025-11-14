@@ -4,14 +4,17 @@ require('./CollectionImage');
 require('./CustomerReviewImage');
 require('./DiamondSpec');
 require('./DiamondTypeImage');
+require('./DYOExpandedVariant');
 require('./EngagementRingBanner');
 require('./FeaturedImage');
 require('./Image');
 require('./Metal');
 require('./Product');
+require('./ExpandedVariant');
+require('./VariantSummary');
+require('./DYOVariant');
 require('./Shape');
 require('./Style');
-require('./Variant');
 require('./enums');
 
 module.exports = {};

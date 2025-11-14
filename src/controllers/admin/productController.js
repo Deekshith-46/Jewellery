@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Product = require('../../models/admin/Product');
-const Variant = require('../../models/admin/Variant');
+const ExpandedVariant = require('../../models/admin/ExpandedVariant');
 const Image = require('../../models/admin/Image');
 const Metal = require('../../models/admin/Metal');
 const Style = require('../../models/admin/Style');
@@ -409,18 +409,16 @@ exports.bulkUploadProductsBySku = async (req, res, next) => {
         const update = {
           product: product._id, // ObjectId reference
           productSku: productSku,
-          variant_sku: variantSku,
-          metal_type: r.metal_type || undefined,
-          metal_code: r.metal_code || undefined,
-          carat: toNumber(r.carat),
-          shape: r.shape || undefined,
+          variantSku: variantSku,
+          metalType: r.metal_type || undefined,
+          metalCode: r.metal_code || undefined,
+          centerStoneWeight: toNumber(r.carat),
           shape_code: r.shape_code || undefined,
-          diamond_type: r.diamond_type || undefined,
-          price: toNumber(r.price),
-          weight_metal: toNumber(r.weight_metal),
-          metal_cost: toNumber(r.metal_cost),
+          diamondType: r.diamond_type || undefined,
+          metalPrice: toNumber(r.price),
+          metalWeight: toNumber(r.weight_metal),
+          metalBasePrice: toNumber(r.metal_cost),
           stock: toNumber(r.stock) ?? 0,
-          readyToShip: toBoolean(r.readyToShip, true),
           active: toBoolean(r.active, true)
         };
 
@@ -444,7 +442,7 @@ exports.bulkUploadProductsBySku = async (req, res, next) => {
 
         variantOps.push({
           updateOne: {
-            filter: { variant_sku: variantSku },
+            filter: { variantSku: variantSku },
             update: { 
               $set: update,
               $setOnInsert: setOnInsert
@@ -458,7 +456,7 @@ exports.bulkUploadProductsBySku = async (req, res, next) => {
 
       if (variantOps.length) {
         try {
-          const result = await Variant.bulkWrite(variantOps, { ordered: false });
+          const result = await ExpandedVariant.bulkWrite(variantOps, { ordered: false });
           results.variants.processed = variantOps.length;
           results.variants.created = result.upsertedCount || 0;
           results.variants.matched = result.matchedCount || 0;

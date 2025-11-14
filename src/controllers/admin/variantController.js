@@ -1,4 +1,4 @@
-const Variant = require('../../models/admin/Variant');
+const ExpandedVariant = require('../../models/admin/ExpandedVariant');
 const Product = require('../../models/admin/Product');
 const mongoose = require('mongoose');
 
@@ -23,12 +23,12 @@ exports.findVariant = async (req, res, next) => {
       query.productSku = productIdentifier;
     }
     
-    if (metal_type) query.metal_type = metal_type;
-    if (carat) query.carat = Number(carat);
-    if (shape) query.shape = shape;
-    if (diamond_type) query.diamond_type = diamond_type;
+    if (metal_type) query.metalType = metal_type;
+    if (carat) query.centerStoneWeight = Number(carat);
+    if (shape) query.shape_code = shape;
+    if (diamond_type) query.diamondType = diamond_type;
 
-    const variant = await Variant.findOne(query).populate('product', 'productSku productName title');
+    const variant = await ExpandedVariant.findOne(query).populate('product', 'productSku productName title');
     
     if (!variant) {
       return res.status(404).json({ message: 'Variant not found' });
@@ -88,12 +88,12 @@ exports.getAllVariants = async (req, res, next) => {
     const skip = (Number(page) - 1) * Number(limit);
     
     const [variants, total] = await Promise.all([
-      Variant.find(query)
+      ExpandedVariant.find(query)
         .populate('product', 'productSku productName title')
-        .sort({ metal_type: 1, carat: 1, shape: 1 })
+        .sort({ metalType: 1, centerStoneWeight: 1, shape_code: 1 })
         .skip(skip)
         .limit(Number(limit)),
-      Variant.countDocuments(query)
+      ExpandedVariant.countDocuments(query)
     ]);
     
     res.json({
@@ -129,9 +129,9 @@ exports.getVariantsByProduct = async (req, res, next) => {
     if (active !== undefined) query.active = active === 'true';
     if (inStock === 'true') query.stock = { $gt: 0 };
 
-    const variants = await Variant.find(query)
+    const variants = await ExpandedVariant.find(query)
       .populate('product', 'productSku productName title')
-      .sort({ metal_type: 1, carat: 1, shape: 1 });
+      .sort({ metalType: 1, centerStoneWeight: 1, shape_code: 1 });
     
     res.json({
       productId,
@@ -162,14 +162,14 @@ exports.getAvailableOptions = async (req, res, next) => {
     
     if (inStock === 'true') query.stock = { $gt: 0 };
 
-    const variants = await Variant.find(query);
+    const variants = await ExpandedVariant.find(query);
     
     const options = {
-      metals: [...new Set(variants.map(v => v.metal_type).filter(Boolean))],
-      shapes: [...new Set(variants.map(v => v.shape).filter(Boolean))],
-      carats: [...new Set(variants.map(v => v.carat).filter(Boolean))].sort((a, b) => a - b),
-      diamond_types: [...new Set(variants.map(v => v.diamond_type).filter(Boolean))],
-      metal_codes: [...new Set(variants.map(v => v.metal_code).filter(Boolean))],
+      metals: [...new Set(variants.map(v => v.metalType).filter(Boolean))],
+      shapes: [...new Set(variants.map(v => v.shape_code).filter(Boolean))],
+      carats: [...new Set(variants.map(v => v.centerStoneWeight).filter(Boolean))].sort((a, b) => a - b),
+      diamond_types: [...new Set(variants.map(v => v.diamondType).filter(Boolean))],
+      metal_codes: [...new Set(variants.map(v => v.metalCode).filter(Boolean))],
       shape_codes: [...new Set(variants.map(v => v.shape_code).filter(Boolean))]
     };
 
@@ -192,12 +192,12 @@ exports.createVariant = async (req, res, next) => {
       }
     }
     
-    // Generate variant_sku if not provided
-    if (!variantData.variant_sku) {
-      variantData.variant_sku = `${variantData.productSku}-${variantData.metal_type}-${variantData.carat}-${variantData.shape}`;
+    // Generate variantSku if not provided
+    if (!variantData.variantSku) {
+      variantData.variantSku = `${variantData.productSku}-${variantData.metalType}-${variantData.centerStoneWeight}-${variantData.shape_code}`;
     }
 
-    const variant = new Variant(variantData);
+    const variant = new ExpandedVariant(variantData);
     await variant.save();
     
     // Populate product details for response
@@ -215,7 +215,7 @@ exports.updateVariant = async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    const variant = await Variant.findByIdAndUpdate(id, updateData, { new: true })
+    const variant = await ExpandedVariant.findByIdAndUpdate(id, updateData, { new: true })
       .populate('product', 'productSku productName title');
     
     if (!variant) {
@@ -233,7 +233,7 @@ exports.deleteVariant = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const variant = await Variant.findByIdAndDelete(id);
+    const variant = await ExpandedVariant.findByIdAndDelete(id);
     
     if (!variant) {
       return res.status(404).json({ message: 'Variant not found' });

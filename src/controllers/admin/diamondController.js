@@ -545,6 +545,8 @@ exports.getAllDiamonds = async (req, res, next) => {
     const {
       page = 1,
       limit = 20,
+      diamondType, // new: Prefer this for Lab Grown vs Natural
+      location,    // alias to support direct location filter
       shape,
       cut,
       carat,
@@ -563,6 +565,31 @@ exports.getAllDiamonds = async (req, res, next) => {
 
     // Build filter object
     const filter = {};
+
+    // Primary diamond type filter (mapped to 'location' field)
+    // Accepts diamondType or location (case-insensitive)
+    const typeInput = (diamondType || location);
+    if (typeInput) {
+      const normalized = String(typeInput).trim().toLowerCase();
+      const isLab = ['lab', 'labgrown', 'lab grown', 'lg'].includes(normalized);
+      const isNatural = ['natural', 'nat'].includes(normalized);
+      if (diamondType !== undefined) {
+        // Strict validation when user explicitly sends diamondType
+        if (!isLab && !isNatural) {
+          return res.status(400).json({
+            message: 'Invalid diamondType. Use "Natural" or "Lab Grown".'
+          });
+        }
+      }
+      if (isLab) {
+        filter.location = /lab\s*grown/i;
+      } else if (isNatural) {
+        filter.location = /natural/i;
+      } else if (location) {
+        // Only when using raw location param we allow regex fallback
+        filter.location = new RegExp(normalized.replace(/[-_/]/g, '.*'), 'i');
+      }
+    }
 
     // Shape filter
     if (shape) {
@@ -710,6 +737,8 @@ exports.getAllDiamonds = async (req, res, next) => {
         hasPrevPage
       },
       filters: {
+        diamondType: typeInput,
+        location: filter.location ? undefined : location,
         shape,
         cut,
         carat,
@@ -761,13 +790,15 @@ exports.getDiamondFilters = async (req, res, next) => {
       cuts,
       clarities,
       colors,
-      carats
+      carats,
+      locations
     ] = await Promise.all([
       Shape.find({}).select('_id code label').sort({ label: 1 }),
       DiamondSpec.distinct('cut').then(cuts => cuts.filter(Boolean).sort()),
       DiamondSpec.distinct('purity').then(clarities => clarities.filter(Boolean).sort()),
       DiamondSpec.distinct('color').then(colors => colors.filter(Boolean).sort()),
-      DiamondSpec.distinct('carat').then(carats => carats.filter(Boolean).sort((a, b) => a - b))
+      DiamondSpec.distinct('carat').then(carats => carats.filter(Boolean).sort((a, b) => a - b)),
+      DiamondSpec.distinct('location').then(l => l.filter(Boolean).sort())
     ]);
 
     // Get price range
@@ -787,6 +818,7 @@ exports.getDiamondFilters = async (req, res, next) => {
       clarities,
       colors,
       carats,
+      locations, // e.g., ["Natural", "Lab Grown"]
       priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 }
     });
   } catch (err) {

@@ -1,5 +1,5 @@
 const Order = require('../../models/user/Order');
-const Variant = require('../../models/admin/Variant');
+const ExpandedVariant = require('../../models/admin/ExpandedVariant');
 
 /**
  * Get all orders (Admin)
@@ -34,7 +34,7 @@ exports.adminGetAllOrders = async (req, res, next) => {
       .skip(skip)
       .limit(Number(limit))
       .populate('userId', 'name email')
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice')
       .populate('items.product', 'productSku productName title')
       .lean();
     
@@ -63,7 +63,7 @@ exports.adminGetOrderById = async (req, res, next) => {
     
     const order = await Order.findById(id)
       .populate('userId', 'name email phone')
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice stock')
       .populate('items.product', 'productSku productName title description')
       .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
       .lean();
@@ -125,7 +125,7 @@ exports.updateOrderStatus = async (req, res, next) => {
     if (status === 'Cancelled' && order.status !== 'Cancelled') {
       for (const item of order.items) {
         if (item.itemType === 'rts' && item.variant) {
-          await Variant.findByIdAndUpdate(
+          await ExpandedVariant.findByIdAndUpdate(
             item.variant,
             { $inc: { stock: item.quantity } }
           );

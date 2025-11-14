@@ -9,6 +9,7 @@ const router = express.Router();
 // New endpoints for the updated data model
 router.get('/filter-options', productController.getFilterOptions); // GET /api/products/filter-options?tab=ready|design
 router.get('/counts', productController.getProductCounts); // GET /api/products/counts (lightweight - just counts)
+router.get('/list/variants', productController.getProductVariants); // GET /api/products/list/variants?tab=ready|design&productId=... (must come before /list)
 router.get('/list', productController.listProducts); // GET /api/products/list?tab=ready|design
 router.get('/detail/:productId', productController.getProductDetail); // GET /api/products/detail/:productId
 
@@ -20,6 +21,8 @@ router.get('/:productId/variants/:variantSku/images', productController.getImage
 router.get('/', productController.getAllProducts);
 router.get('/:id', productController.getProductById);
 router.get('/:id/price', productController.getPriceForSelection);
+router.get('/:id/price/rts', productController.getRtsPriceForSelection);
+router.get('/:id/price/dyo', productController.getDyoPriceForSelection);
 
 module.exports = router;
 

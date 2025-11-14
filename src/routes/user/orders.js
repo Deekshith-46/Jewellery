@@ -6,6 +6,12 @@ const auth = require('../../middleware/auth');
 // Checkout from cart and create order
 router.post('/checkout', auth, orderController.checkoutFromCart);
 
+// Direct DYO checkout (Buy Now)
+router.post('/dyo/checkout', auth, orderController.checkoutDyoNow);
+
+// Direct RTS checkout (Buy Now)
+router.post('/rts/checkout', auth, orderController.checkoutRtsNow);
+
 // Get all user orders
 router.get('/', auth, orderController.getUserOrders);
 
@@ -21,3 +27,5 @@ router.put('/:orderId/cancel', auth, orderController.cancelOrder);
 router.put('/:orderId/payment-status', orderController.updatePaymentStatus);
 
 module.exports = router;
+
+

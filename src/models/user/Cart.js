@@ -11,7 +11,7 @@ const CartItemSchema = new mongoose.Schema({
   // For RTS: Reference to variant
   variant: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Variant'
+    ref: 'ExpandedVariant'
   },
   variant_sku: String,
   

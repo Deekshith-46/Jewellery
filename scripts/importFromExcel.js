@@ -5,7 +5,7 @@ const path = require('path');
 
 const connectDB = require('../config/db');
 const Product = require('../models/admin/Product');
-const Variant = require('../models/admin/Variant');
+// Removed legacy Variant model usage
 const Metal = require('../models/admin/Metal');
 const Image = require('../models/admin/Image');
 
@@ -79,7 +79,7 @@ const runImport = async () => {
 
     let productsCreated = 0;
     let productsUpdated = 0;
-    let variantsCreated = 0;
+    let variantsCreated = 0; // kept for legacy summary; no longer creating Variant records
     let metalsUpdated = 0;
 
     // Process each row
@@ -138,39 +138,7 @@ const runImport = async () => {
         console.log(`Created product: ${productId}`);
       }
 
-      // Create Variant if this row represents a sellable variant
-      if (metalType && carat && price) {
-        const variantSku = row.variant_sku || row.sku || `${productSku}-${metalType}-${carat}`;
-        const variantId = generateVariantId(productId, metalType, carat, shape);
-
-        const variantData = {
-          variantId,
-          productId,
-          sku: variantSku,
-          metal_type: metalType,
-          carat: carat,
-          shape: shape || undefined,
-          diamond_type: row.diamond_type || undefined,
-          price: price,
-          stock: stock,
-          readyToShip: readyToShip,
-          weight_metal: toNumber(row.metal_weight),
-          metal_cost: toNumber(row.metal_cost),
-          active: active
-        };
-
-        // Remove undefined values
-        Object.keys(variantData).forEach(key => {
-          if (variantData[key] === undefined) delete variantData[key];
-        });
-
-        const existingVariant = await Variant.findOne({ variantId });
-        if (!existingVariant) {
-          await Variant.create(variantData);
-          variantsCreated++;
-          console.log(`Created variant: ${variantId}`);
-        }
-      }
+      // Legacy Variant creation removed. Variants should be imported via scripts/importWorkbook.js
 
 
       // Create Metal entries for pricing

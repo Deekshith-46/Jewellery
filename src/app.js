@@ -29,6 +29,7 @@ app.use('/api/orders', require('./routes/user/orders'));
 app.use('/api/wishlist', require('./routes/user/wishlist'));
 app.use('/api/addresses', require('./routes/user/addresses'));
 app.use('/api/cart', require('./routes/user/cart'));
+app.use('/api/contacts', require('./routes/user/contacts'));
 
 // admin routes
 app.use('/api/admin/auth', require('./routes/admin/auth'));
@@ -38,6 +39,7 @@ app.use('/api/admin/orders', require('./routes/admin/orders'));
 app.use('/api/admin/variants', require('./routes/admin/variants'));
 app.use('/api/admin/metals', require('./routes/admin/metals'));
 app.use('/api/admin/images', require('./routes/admin/images'));
+app.use('/api/admin/coupons', require('./routes/admin/coupons'));
 
 // error handler (last)
 app.use(errorHandler);

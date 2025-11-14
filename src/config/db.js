@@ -6,15 +6,21 @@ if (MONGO_URI) {
   MONGO_URI = MONGO_URI.replace(/^"(.*)"$/, '$1');
 }
 
+// Helper: get collection if it exists
+const getCollectionIfExists = async (name) => {
+  const db = mongoose.connection.db;
+  const found = await db.listCollections({ name }).toArray();
+  return found.length ? db.collection(name) : null;
+};
+
 // Helper function to drop old/invalid indexes
 const dropOldIndexes = async () => {
   try {
-    const db = mongoose.connection.db;
-    
     // Drop old indexes from Variants collection
-    const variantsCollection = db.collection('variants');
+    const variantsCollection = await getCollectionIfExists('variants');
+    if (variantsCollection) {
     
-    const oldVariantIndexes = ['variantId_1', 'sku_1', 'variantSku_1', 'product_1'];
+    const oldVariantIndexes = ['variantId_1', 'sku_1', 'variantSku_1', 'product_1', 'variant_sku_1', 'variant_sku_1_active_1'];
     for (const indexName of oldVariantIndexes) {
       try {
         await variantsCollection.dropIndex(indexName);
@@ -25,9 +31,11 @@ const dropOldIndexes = async () => {
         }
       }
     }
+    }
 
     // Drop old indexes from Metals collection
-    const metalsCollection = db.collection('metals');
+    const metalsCollection = await getCollectionIfExists('metals');
+    if (metalsCollection) {
     const oldMetalIndexes = ['code_1', 'name_1'];
     for (const indexName of oldMetalIndexes) {
       try {
@@ -39,9 +47,11 @@ const dropOldIndexes = async () => {
         }
       }
     }
+    }
 
     // Drop old indexes from Images collection
-    const imagesCollection = db.collection('images');
+    const imagesCollection = await getCollectionIfExists('images');
+    if (imagesCollection) {
     const oldImageIndexes = ['productId_1', 'variantId_1', 'productId_1_active_1', 'variantId_1_active_1', 'url_1', 'productSku_1_variant_sku_1_image_url_1'];
     for (const indexName of oldImageIndexes) {
       try {
@@ -53,9 +63,11 @@ const dropOldIndexes = async () => {
         }
       }
     }
+    }
 
     // Drop old indexes from WishlistItems collection
-    const wishlistCollection = db.collection('wishlistitems');
+    const wishlistCollection = await getCollectionIfExists('wishlistitems');
+    if (wishlistCollection) {
     const oldWishlistIndexes = ['userId_1_productId_1_diamondSpecId_1'];
     for (const indexName of oldWishlistIndexes) {
       try {
@@ -67,9 +79,11 @@ const dropOldIndexes = async () => {
         }
       }
     }
+    }
 
     // Drop old indexes from Carts collection
-    const cartsCollection = db.collection('carts');
+    const cartsCollection = await getCollectionIfExists('carts');
+    if (cartsCollection) {
     const oldCartIndexes = ['userId_1_updatedAt_-1'];
     for (const indexName of oldCartIndexes) {
       try {
@@ -80,6 +94,39 @@ const dropOldIndexes = async () => {
           console.log(`⚠️  Could not drop ${indexName}:`, err.message);
         }
       }
+    }
+    }
+
+    // Drop old indexes from Products collection
+    const productsCollection = await getCollectionIfExists('products');
+    if (productsCollection) {
+    const oldProductIndexes = ['productId_1', 'productId_1_active_1', 'slug_1', 'title_1'];
+    for (const indexName of oldProductIndexes) {
+      try {
+        await productsCollection.dropIndex(indexName);
+        console.log(`✅ Dropped old index: ${indexName} from products collection`);
+      } catch (err) {
+        if (err.code !== 27) {
+          console.log(`⚠️  Could not drop ${indexName}:`, err.message);
+        }
+      }
+    }
+    }
+
+    // Drop old indexes from DYOExpandedVariants collection
+    const dyoVariantsCollection = await getCollectionIfExists('dyoexpandedvariants');
+    if (dyoVariantsCollection) {
+    const oldDYOVariantIndexes = ['variant_sku_1', 'variant_sku_1_active_1', 'variantId_1', 'sku_1'];
+    for (const indexName of oldDYOVariantIndexes) {
+      try {
+        await dyoVariantsCollection.dropIndex(indexName);
+        console.log(`✅ Dropped old index: ${indexName} from dyoexpandedvariants collection`);
+      } catch (err) {
+        if (err.code !== 27) {
+          console.log(`⚠️  Could not drop ${indexName}:`, err.message);
+        }
+      }
+    }
     }
 
   } catch (err) {

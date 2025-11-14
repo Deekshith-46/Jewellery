@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 const Cart = require('../../models/user/Cart');
-const Variant = require('../../models/admin/Variant');
+const ExpandedVariant = require('../../models/admin/ExpandedVariant');
 const Product = require('../../models/admin/Product');
 const DiamondSpec = require('../../models/admin/DiamondSpec');
-const Metal = require('../../models/admin/Metal');
+const DYOExpandedVariant = require('../../models/admin/DYOExpandedVariant');
 
 /**
  * Get user's cart
@@ -16,7 +16,7 @@ exports.getCart = async (req, res, next) => {
     let cart = await Cart.findOne({ userId })
       .populate({
         path: 'items.variant',
-        select: 'variant_sku productSku metal_type shape carat price stock active'
+        select: 'variantSku productSku metalType shape_code centerStoneWeight metalPrice stock active'
       })
       .populate({
         path: 'items.product',
@@ -75,27 +75,53 @@ exports.getCart = async (req, res, next) => {
 exports.addRTSToCart = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const { variant_sku, variantId, quantity = 1, engraving, specialInstructions } = req.body;
+    const {
+      variant_sku,
+      variantId,
+      // selection-based add (alternative to variant identifiers)
+      productSku,
+      metalType,
+      metalCode,
+      shape,
+      shapeCode,
+      centerStoneWeight,
+      quantity = 1,
+      engraving,
+      specialInstructions
+    } = req.body;
     
-    if (!variant_sku && !variantId) {
+    if (!variant_sku && !variantId && !productSku) {
       return res.status(400).json({ 
         success: false,
-        message: 'variant_sku or variantId is required' 
+        message: 'Provide variant_sku, variantId, or selection (productSku + metal/shape/centerStoneWeight)' 
       });
     }
     
     // Find variant
     let variant;
     if (variantId && mongoose.Types.ObjectId.isValid(variantId)) {
-      variant = await Variant.findById(variantId);
+      variant = await ExpandedVariant.findById(variantId);
     } else if (variant_sku) {
-      variant = await Variant.findOne({ variant_sku });
+      variant = await ExpandedVariant.findOne({ variantSku: variant_sku });
+    } else if (productSku) {
+      // Build selection query similar to checkoutRtsNow
+      const desiredShape = shapeCode
+        ? String(shapeCode).toUpperCase()
+        : (shape ? String(shape).toUpperCase() : null);
+      const desiredMetalType = metalType ? String(metalType) : null;
+      const desiredMetalCode = metalCode ? String(metalCode).toUpperCase() : null;
+      const q = { productSku, active: true };
+      if (centerStoneWeight !== undefined) q.centerStoneWeight = Number(centerStoneWeight);
+      if (desiredShape) q.shape_code = { $regex: `^${desiredShape}$`, $options: 'i' };
+      if (desiredMetalCode) q.metalCode = desiredMetalCode;
+      if (!desiredMetalCode && desiredMetalType) q.metalType = { $regex: `^${desiredMetalType}$`, $options: 'i' };
+      variant = await ExpandedVariant.findOne(q);
     }
     
     if (!variant) {
       return res.status(404).json({ 
         success: false,
-        message: 'Variant not found' 
+        message: 'Variant not found for provided identifier/selection' 
       });
     }
     
@@ -126,7 +152,7 @@ exports.addRTSToCart = async (req, res, next) => {
               item.variant.toString() === variant._id.toString()
     );
     
-    const pricePerItem = variant.price || 0;
+    const pricePerItem = Number(variant.totalPrice || variant.metalPrice || 0);
     const qty = Number(quantity);
     const totalPrice = pricePerItem * qty;
     
@@ -150,7 +176,7 @@ exports.addRTSToCart = async (req, res, next) => {
       cart.items.push({
         itemType: 'rts',
         variant: variant._id,
-        variant_sku: variant.variant_sku,
+        variant_sku: variant.variantSku,
         quantity: qty,
         pricePerItem,
         totalPrice,
@@ -163,7 +189,7 @@ exports.addRTSToCart = async (req, res, next) => {
     
     // Populate and return - only selected fields
     cart = await Cart.findById(cart._id)
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice stock')
       .populate('items.product', 'productSku productName title default_price') // Minimal product info
       .populate('items.selectedDiamond', 'sku shape carat cut color clarity price')
       .lean();
@@ -203,10 +229,13 @@ exports.addDYOToCart = async (req, res, next) => {
   try {
     const userId = req.user._id;
     const { 
-      productSku, 
+      productSku,
       productId,
-      selectedMetal, 
-      selectedShape, 
+      // selection inputs similar to DYO Buy Now
+      metalType,
+      metal, // code
+      shape,
+      shapeCode,
       selectedCarat,
       diamondSku,
       diamondId,
@@ -268,33 +297,32 @@ exports.addDYOToCart = async (req, res, next) => {
       }
     }
     
-    // Calculate price with detailed breakdown for DYO items
-    const diamond_price = diamond ? (diamond.price || 0) : 0;
-    let metal_cost = 0;
-    let metal_weight = 0;
-    
-    // Calculate metal cost if metal is selected
-    if (selectedMetal) {
-      // Try to find metal by metal_type (exact match or normalized)
-      let metal = await Metal.findOne({ metal_type: selectedMetal });
-      
-      // If not found, try case-insensitive search
-      if (!metal) {
-        metal = await Metal.findOne({ 
-          metal_type: { $regex: new RegExp(`^${selectedMetal}$`, 'i') } 
-        });
-      }
-      
-      if (metal) {
-        // Get metal weight from product metadata or use default
-        metal_weight = product.metadata?.metal_weight || product.metadata?.weight || 5; // default 5g if not specified
-        metal_cost = (metal.rate_per_gram || 0) * metal_weight;
-      } else {
-        console.warn(`Metal not found: ${selectedMetal}`);
-      }
+    // Calculate price mirroring DYO Buy Now
+    const diamond_price = diamond ? Number(diamond.price || 0) : 0;
+    // Normalize selection
+    const referenceShapeCode = shapeCode
+      ? String(shapeCode).toUpperCase()
+      : (shape ? String(shape).trim().toUpperCase() : undefined);
+    const metalCodeToCheck = metal ? String(metal).toUpperCase() : null;
+    const metalTypeToCheck = metalType ? String(metalType) : null;
+    // Query DYOExpandedVariant for metal price
+    const sku = product.productSku || product.productId || productSku;
+    let query = {
+      $or: [{ product: product._id }, { productSku: sku }],
+      active: true
+    };
+    if (metalCodeToCheck) query.metalCode = metalCodeToCheck;
+    else if (metalTypeToCheck) query.metalType = { $regex: `^${metalTypeToCheck}$`, $options: 'i' };
+    if (referenceShapeCode) query.shape_code = { $regex: `^${referenceShapeCode}$`, $options: 'i' };
+    let dyoExpanded = await DYOExpandedVariant.findOne(query).sort({ updatedAt: -1 }).lean();
+    // Fallback: try without shape if not found
+    if (!dyoExpanded && referenceShapeCode) {
+      const q2 = { ...query };
+      delete q2.shape_code;
+      dyoExpanded = await DYOExpandedVariant.findOne(q2).sort({ updatedAt: -1 }).lean();
     }
-    
-    // Total price per item = metal + diamond (setting_price removed)
+    const metal_cost = Number(dyoExpanded?.metalPrice || 0);
+    const metal_weight = Number(dyoExpanded?.metalWeight || 0);
     const pricePerItem = metal_cost + diamond_price;
     const qty = Number(quantity);
     const totalPrice = pricePerItem * qty;
@@ -317,8 +345,8 @@ exports.addDYOToCart = async (req, res, next) => {
       itemType: 'dyo',
       product: product._id,
       productSku: product.productSku,
-      selectedMetal,
-      selectedShape,
+      selectedMetal: metalCodeToCheck || metalTypeToCheck,
+      selectedShape: referenceShapeCode || shape,
       selectedCarat: selectedCarat ? Number(selectedCarat) : undefined,
       selectedDiamond: diamond ? diamond._id : undefined,
       diamondSku: diamond ? diamond.sku : undefined,
@@ -334,7 +362,7 @@ exports.addDYOToCart = async (req, res, next) => {
     
     // Populate and return - only selected fields
     cart = await Cart.findById(cart._id)
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice stock')
       .populate('items.product', 'productSku productName title default_price description main_shape style') // Product info
       .populate({
         path: 'items.selectedDiamond',
@@ -414,7 +442,7 @@ exports.updateCartItem = async (req, res, next) => {
     } else {
       // Check stock for RTS items
       if (item.itemType === 'rts' && item.variant) {
-        const variant = await Variant.findById(item.variant);
+        const variant = await ExpandedVariant.findById(item.variant);
         if (variant && variant.stock < newQty) {
           return res.status(400).json({ 
             success: false,
@@ -432,7 +460,7 @@ exports.updateCartItem = async (req, res, next) => {
     
     // Populate and return - only selected fields
     const updatedCart = await Cart.findById(cart._id)
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price stock')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice stock')
       .populate('items.product', 'productSku productName title default_price description main_shape style')
       .populate({
         path: 'items.selectedDiamond',
@@ -508,7 +536,7 @@ exports.removeFromCart = async (req, res, next) => {
     
     // Populate and return - only selected fields
     const updatedCart = await Cart.findById(cart._id)
-      .populate('items.variant', 'variant_sku productSku metal_type shape carat price')
+      .populate('items.variant', 'variantSku productSku metalType shape_code centerStoneWeight metalPrice')
       .populate('items.product', 'productSku productName title default_price description main_shape style')
       .populate({
         path: 'items.selectedDiamond',

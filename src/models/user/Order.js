@@ -11,7 +11,7 @@ const OrderItemSchema = new mongoose.Schema({
   // For RTS: Variant reference
   variant: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Variant'
+    ref: 'ExpandedVariant'
   },
   variant_sku: String,
   
@@ -103,6 +103,18 @@ const OrderSchema = new mongoose.Schema({
   discount: { 
     type: Number, 
     default: 0 
+  },
+  // Coupon information
+  couponId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Coupon'
+  },
+  couponCode: {
+    type: String
+  },
+  couponDiscount: {
+    type: Number,
+    default: 0
   },
   total: { 
     type: Number, 
